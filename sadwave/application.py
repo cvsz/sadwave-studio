@@ -40,6 +40,8 @@ class CreateContentJob:
             raise ValueError("Idempotency key is required")
         existing = self._repository.get_by_idempotency_key(idempotency_key)
         if existing is not None:
+            if existing.channel_id != channel_id or existing.kind != kind:
+                raise ValueError("Idempotency key was already used for a different request")
             return existing
         job = ContentJob.create(job_id, channel_id, kind, idempotency_key)
         self._repository.save(job)
