@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=75,<76"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sadwave-studio"
+version = "0.1.0"
+description = "Production-grade, local-first YouTube content automation platform"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "fastapi==0.117.1",
+  "uvicorn[standard]==0.36.0",
+  "pydantic==2.11.9",
+  "pydantic-settings==2.10.1",
+  "psycopg[binary,pool]==3.2.10",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.4.2",
+  "httpx==0.28.1",
+  "ruff==0.13.1",
+]
+
+[tool.setuptools.packages.find]
+include = ["sadwave*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
