@@ -1,6 +1,6 @@
 # SadwaveStudio Implementation Plan
 
-## Stage 0 — Foundation
+## Stage 0 — Foundation — Complete
 
 - Establish repository-specific agent contract.
 - Preserve ztemplate security/community baseline.
@@ -8,64 +8,78 @@
 - Replace generic template identity with SadwaveStudio identity.
 - Add architecture, security, and readiness documentation.
 
-## Stage 1 — Runtime foundation
+## Stage 1 — Runtime foundation — Complete
 
-- Select and document application runtime.
-- Establish API/dashboard/worker boundaries.
-- Add configuration validation.
-- Add structured logging, request IDs, health/readiness/version endpoints.
-- Add test harness and CI quality gates.
+- Select Python 3.12 + FastAPI runtime.
+- Establish API boundary.
+- Add validated configuration.
+- Add request IDs and health/readiness/version endpoints.
+- Add production bearer authentication.
+- Add domain job lifecycle state machine.
+- Add idempotent job creation.
+- Add PostgreSQL repository and initial migration.
+- Add unit/API tests.
+- Add Ruff format/lint/compile gates.
+- Add dependency audit and SBOM generation.
+- Add production Docker/Compose healthchecks.
 
-## Stage 2 — Persistence and jobs
+## Stage 2 — Persistence and jobs — In progress
 
-- Implement database migrations.
-- Implement core entities and lifecycle states.
-- Implement queue/job model.
-- Implement idempotency and transactional state transitions.
-- Implement audit events.
+- [x] Core content-job persistence
+- [x] Lifecycle states
+- [x] Idempotency key uniqueness
+- [ ] Durable audit events
+- [ ] Queue/job execution model
+- [ ] Retry/dead-letter/cancellation/lease recovery
+- [ ] Transactional outbox where required
+- [ ] PostgreSQL integration tests
+- [ ] Backup and restore verification
 
-## Stage 3 — YouTube integration
+## Stage 3 — YouTube integration — Not started
 
 - Verify authoritative API contracts.
 - Implement OAuth credential lifecycle.
 - Implement channel/video/playlist synchronization.
 - Implement historical analytics snapshots.
-- Implement publishing as an approval-gated job.
+- Implement approval-gated publishing and verification.
 
-## Stage 4 — AI/media factory
+## Stage 4 — AI/media factory — Not started
 
-- Implement provider interfaces.
-- Add local-first routing.
-- Add media validation and isolated FFmpeg workers.
-- Add transcription, subtitles, translation, thumbnails, metadata, and Shorts candidate workflows.
-- Persist provenance.
+- Provider interfaces and provenance.
+- Local-first routing.
+- Media validation and isolated FFmpeg workers.
+- Transcription, subtitles, translation, thumbnails, metadata, and Shorts workflows.
 
-## Stage 5 — Intelligence
+## Stage 5 — Intelligence — Not started
 
 - Opportunity engine.
-- Content knowledge graph.
+- Content knowledge model.
 - Analytics and anomaly detection.
 - Experiment registry.
 - Recommendation engine.
 - Revenue intelligence.
 
-## Stage 6 — Distribution/community
+## Stage 6 — Distribution/community — Not started
 
-- Adapter framework for supported platforms.
+- Platform adapter framework.
 - Comment classification and approval-gated drafts.
 - Community-post drafts.
 - Campaign scheduling.
 
-## Stage 7 — Security/operations
+## Stage 7 — Security/operations — In progress
 
-- Threat-model tests.
-- Container/SAST/SBOM/security scanning.
-- Cost controls.
-- Backup/restore.
-- Disaster recovery.
-- Operational alerts.
+- [x] Secret and dependency gates
+- [x] SBOM generation
+- [x] Production authentication baseline
+- [ ] RBAC
+- [ ] Rate limiting
+- [ ] Container vulnerability scanning with a trusted current scanner
+- [ ] Threat-model tests
+- [ ] Backup/restore
+- [ ] Disaster recovery
+- [ ] Operational alerting
 
-## Stage 8 — Production hardening
+## Stage 8 — Production hardening — Not started
 
 Validate duplicate requests, restarts, worker crashes, timeouts, 401/403/404/409/429/5xx, quota exhaustion, expired credentials, partial provider failures, database restart, storage failure, and rollback.
 
