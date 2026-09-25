@@ -2,54 +2,83 @@
 
 Production-grade, secure, observable, cost-controlled automation for YouTube content operations.
 
-> **Status: Foundation / not production-ready.** The repository currently contains the hardened project baseline and architecture contract. Application capabilities are being implemented incrementally behind explicit readiness gates.
+> **Current status: Runtime foundation implemented; full production platform is still under staged implementation.**
 
-## Mission
+## Implemented now
 
-SadwaveStudio is designed to continuously support:
+- Python 3.12 + FastAPI runtime
+- Environment validation with production fail-closed rules
+- Request correlation IDs
+- /health, /ready, /version
+- Bearer authentication for staging/production API mutations
+- Content-job lifecycle state machine
+- Idempotent job creation with request-conflict protection
+- PostgreSQL persistence adapter and migration
+- Production Docker image and Compose topology
+- Ruff formatting/linting
+- Unit/API tests
+- Dependency vulnerability audit
+- SBOM generation
+- Cost-lock, dry-run, and autonomy controls
 
-- YouTube channel synchronization and intelligence
-- content opportunity discovery and planning
-- AI-assisted scripts, metadata, subtitles, translations, and thumbnails
-- deterministic media processing and Shorts candidates
-- approval-gated publishing and distribution
-- analytics, experiments, anomaly detection, and recommendations
-- community/comment intelligence
-- provenance, auditability, security, and cost controls
-- local-first AI with provider independence
+## Quick start
 
-## Safety model
+~~~bash
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install -e '.[dev]'
+pytest
+python -m sadwave
+~~~
 
-High-risk operations use:
+For a production-shaped local stack:
 
-`validate → authorize → policy → idempotency → execute → verify → audit`
+~~~bash
+export POSTGRES_PASSWORD='use-a-local-secret'
+export API_TOKEN='use-a-local-secret'
+docker compose up --build
+~~~
 
-Publishing, deletion, replacement, public communication, credential changes, billing changes, copyright-sensitive actions, and policy-sensitive content require explicit approval unless an enabled autonomy policy permits them.
+Then run the database migration:
 
-The system must never automate fake engagement, spam, credential abuse, CAPTCHA bypass, rate-limit bypass, or copyright circumvention.
+~~~bash
+docker compose exec api python scripts/migrate.py
+~~~
 
-## Architecture
+The production API requires:
 
-See:
+~~~text
+Authorization: Bearer <API_TOKEN>
+X-Idempotency-Key: <unique-key>
+~~~
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [Implementation Plan](docs/IMPLEMENTATION_PLAN.md)
-- [AI Master Production Prompt](docs/AI_MASTER_PRODUCTION_PROMPT.md)
-- [Security Model](docs/SECURITY_MODEL.md)
-- [Production Readiness](docs/PRODUCTION_READINESS.md)
+## Safety
 
-Target boundaries include API, dashboard, workers, domain/application services, provider adapters, persistence, queues, object storage, media processing, AI, publishing, distribution, analytics, and audit.
+Public mutations must follow:
 
-## Source of truth
+~~~text
+validate → authorize → policy → idempotency → execute → verify → audit
+~~~
 
-`cvsz/ztemplate` is the architectural/reference baseline only. SadwaveStudio must adapt the template rather than modify or blindly copy it.
+Publishing, deletion, replacement, public communication, credentials, billing, copyright-sensitive actions, and other high-risk operations remain approval-gated.
 
-## Development contract
+The system must never automate fake engagement, spam, credential abuse, CAPTCHA/rate-limit bypass, or copyright circumvention.
 
-Read [AGENTS.md](AGENTS.md) before making changes.
+## Architecture and governance
 
-Production readiness requires evidence, not generated files or documentation alone.
+- Architecture: docs/ARCHITECTURE.md
+- Implementation Plan: docs/IMPLEMENTATION_PLAN.md
+- AI Master Production Prompt: docs/AI_MASTER_PRODUCTION_PROMPT.md
+- Security Model: docs/SECURITY_MODEL.md
+- Production Readiness: docs/PRODUCTION_READINESS.md
+- Agent Contract: AGENTS.md
+
+cvsz/ztemplate is reference-only and must not be modified by SadwaveStudio work.
+
+## Production status
+
+Do not treat the existence of a Docker image or green unit tests as proof that the complete YouTube automation platform is production-ready. The readiness checklist is evidence-based and remains incomplete until all applicable integration, security, recovery, and operational gates pass.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See LICENSE.
