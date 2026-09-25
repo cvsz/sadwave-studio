@@ -1,21 +1,27 @@
 # Changelog
 
-All notable changes to projects created from this template should be documented here.
-
-The format is based on Keep a Changelog and projects are encouraged to follow Semantic Versioning.
+All notable changes to SadwaveStudio should be documented here.
 
 ## [Unreleased]
 
 ### Added
 
-- Repository template baseline
-- Security and contribution policies
-- GitHub issue and pull request templates
-- CI, CodeQL, dependency review, and Dependabot automation
-- Release workflow and project documentation structure
+- SadwaveStudio production automation master contract
+- Domain architecture and trust-boundary documentation
+- Implementation plan and production-readiness gates
+- Security threat model and mutation safety contract
 
 ### Changed
 
+- Replaced generic template agent guidance with SadwaveStudio-specific engineering rules
+- Replaced placeholder task commands with repository validation and security checks
+- Added explicit local-first, dry-run, autonomy, and cost-lock configuration examples
+- Replaced the generic Docker placeholder with a fail-closed foundation image
+
 ### Fixed
 
+- Removed generic template identity from the main project documentation
+
 ### Security
+
+- Added explicit controls for prompt injection, malicious media, OAuth secrets, webhook replay, unauthorized publishing, and uncontrolled paid-provider fallback
