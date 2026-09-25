@@ -6,22 +6,25 @@ All notable changes to SadwaveStudio should be documented here.
 
 ### Added
 
-- SadwaveStudio production automation master contract
-- Domain architecture and trust-boundary documentation
-- Implementation plan and production-readiness gates
-- Security threat model and mutation safety contract
+- Production Python/FastAPI runtime foundation
+- PostgreSQL content-job repository and initial migration
+- Content-job lifecycle state machine
+- Idempotency enforcement and request-conflict detection
+- Production API bearer authentication
+- Docker and Compose runtime with dependency healthchecks
+- Unit/API test suite
+- Ruff formatting/linting and Python compile validation
+- Dependency vulnerability audit
+- SBOM generation
 
 ### Changed
 
-- Replaced generic template agent guidance with SadwaveStudio-specific engineering rules
-- Replaced placeholder task commands with repository validation and security checks
-- Added explicit local-first, dry-run, autonomy, and cost-lock configuration examples
-- Replaced the generic Docker placeholder with a fail-closed foundation image
-
-### Fixed
-
-- Removed generic template identity from the main project documentation
+- CI now validates the application runtime instead of only inherited template files.
+- Production readiness documentation now distinguishes implemented runtime capabilities from the incomplete full platform.
+- Compose credentials are required through environment injection rather than committed defaults.
 
 ### Security
 
-- Added explicit controls for prompt injection, malicious media, OAuth secrets, webhook replay, unauthorized publishing, and uncontrolled paid-provider fallback
+- Removed the compromised Trivy GitHub Action from CI after GitHub Dependency Review identified advisory GHSA-69fq-xp46-6x23.
+- Production/staging startup now fails closed without an API token.
+- Production API mutations require bearer authentication and idempotency keys.
