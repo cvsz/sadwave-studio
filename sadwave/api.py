@@ -46,7 +46,20 @@ def _authorized(request: Request) -> bool:
 async def request_id_and_auth_middleware(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID") or str(uuid4())
     if request.url.path.startswith("/api/") and not _authorized(request):
-        return HTTPException(status_code=401, detail="unauthorized")
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "unauthorized",
+                    "requestId": request_id,
+                    "details": [],
+                }
+            },
+            headers={"X-Request-ID": request_id},
+        )
     response = await call_next(request)
     response.headers["X-Request-ID"] = request_id
     return response
