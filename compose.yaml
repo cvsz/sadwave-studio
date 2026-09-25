@@ -12,6 +12,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   api:
     build: .
@@ -24,16 +25,38 @@ services:
       AUTONOMY_LEVEL: "0"
       COST_LOCK: "true"
       AI_PROVIDER_MODE: local
+      API_RATE_LIMIT: "60"
+      API_RATE_WINDOW_SECONDS: "60"
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3000/health', timeout=3).read()"]
       interval: 30s
       timeout: 5s
       retries: 3
+
+  worker:
+    build: .
+    command: ["python", "-m", "sadwave.worker"]
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql://sadwave:${POSTGRES_PASSWORD}@postgres:5432/sadwave
+      API_TOKEN: ${API_TOKEN:?API_TOKEN is required}
+      DRY_RUN: "true"
+      AUTONOMY_LEVEL: "0"
+      COST_LOCK: "true"
+      AI_PROVIDER_MODE: local
+      WORKER_ID: ${WORKER_ID:-sadwave-worker}
+      WORKER_LEASE_SECONDS: "300"
+      WORKER_POLL_SECONDS: "2"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   postgres-data:
