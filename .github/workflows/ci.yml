@@ -75,8 +75,14 @@ jobs:
           fi
 
       - name: YAML syntax
-        shell: bash
-        run: ruby -e 'require "yaml"; Dir.glob(".github/**/*.{yml,yaml}").each { |f| YAML.load_file(f); puts "ok #{f}" }'
+        run: |
+          ruby <<'RUBY'
+          require "yaml"
+          Dir.glob(".github/**/*.{yml,yaml}").each do |file|
+            YAML.load_file(file)
+            puts "ok #{file}"
+          end
+          RUBY
 
   container:
     runs-on: ubuntu-latest
