@@ -23,6 +23,13 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql://sadwave:sadwave@localhost:5432/sadwave"
 
+    api_rate_limit: int = Field(default=60, ge=1, le=10000)
+    api_rate_window_seconds: int = Field(default=60, ge=1, le=3600)
+    worker_id: str = Field(default="sadwave-worker", min_length=1, max_length=128)
+    worker_lease_seconds: int = Field(default=300, ge=30, le=3600)
+    worker_poll_seconds: float = Field(default=2.0, gt=0, le=60)
+    worker_max_attempts: int = Field(default=5, ge=1, le=20)
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_prefix="",
