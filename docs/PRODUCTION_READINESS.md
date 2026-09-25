@@ -4,13 +4,13 @@ This file is the authoritative checklist for declaring SadwaveStudio production-
 
 ## Current status
 
-**PRODUCTION-CORE HARDENING COMPLETE — FULL PLATFORM RELEASE REMAINS GATED.**
+**NOT PRODUCTION-READY. Runtime hardening is implemented; release evidence and major platform capabilities remain outstanding.**
 
-The repository now has a durable PostgreSQL-backed queue, worker leases and recovery, retry/dead-letter handling, immutable audit-event persistence, database-backed API rate limiting, security response headers, production Compose worker topology, and CI action supply-chain hardening.
+The repository implements a durable PostgreSQL-backed queue, lease fencing and recovery, bounded retries, transactional audit writes, atomic idempotency, database-backed API rate limiting, common request/error handling, versioned migrations, production Compose topology, and pinned CI actions. These capabilities still require hosted CI and operational evidence before release claims.
 
 The complete YouTube automation platform is **not yet production-ready** because YouTube OAuth/synchronization, provider contracts, media isolation, AI execution, dashboard/RBAC, backup/restore evidence, and full integration/E2E/recovery evidence are still outstanding.
 
-## Completed evidence-backed gates
+## Implemented capability checklist
 
 ### Application
 
@@ -20,6 +20,7 @@ The complete YouTube automation platform is **not yet production-ready** because
 - [x] Domain job state machine
 - [x] Idempotency enforcement
 - [x] PostgreSQL persistence adapter
+- [x] Restricted PostgreSQL runtime role with administrator-only migrations
 - [x] Durable queue persistence
 - [x] Worker claim/lease model
 - [x] Expired-worker lease recovery
@@ -43,7 +44,7 @@ The complete YouTube automation platform is **not yet production-ready** because
 - [ ] Backup
 - [ ] Restore verification
 - [ ] Production resource limits and runtime isolation
-- [ ] Migration rollback/versioning policy
+- [ ] Migration rollback policy
 
 ### Integrations
 
@@ -84,8 +85,9 @@ The complete YouTube automation platform is **not yet production-ready** because
 - [x] Unit/API test gate configured
 - [x] Idempotency test coverage
 - [x] Dependency audit gate
-- [ ] Integration tests against PostgreSQL
-- [ ] Queue tests
+- [x] Focused PostgreSQL integration tests for idempotency, rate limits, and lease fencing
+- [ ] Retry/dead-letter behavior tests against PostgreSQL
+- [ ] Worker crash/restart recovery test
 - [ ] Provider contract tests
 - [ ] Media tests
 - [ ] Security tests
@@ -109,4 +111,10 @@ The complete YouTube automation platform is **not yet production-ready** because
 - [ ] Manual approval gates verified
 - [ ] Production deployment evidence
 
-A production claim requires evidence for every applicable gate. A code path or checklist item is not considered complete merely because it exists; it must be validated in the target runtime.
+## Validation evidence for this change
+
+- Local disposable PostgreSQL 17.6 with Python 3.12: 19 tests passed, including runtime-role privilege checks, concurrent idempotency/rate-limit checks, stale-lease fencing, and migration reapplication.
+- Ruff format/lint, Python compile, Docker image build, and Compose configuration passed locally.
+- GitHub CI for the pushed PR remains the hosted gate; production deployment, backup/restore, rollback, provider-contract, full security-test, and end-to-end evidence remain outstanding.
+
+A production claim requires evidence for every applicable gate. A code path or checklist item is not complete merely because it exists; it must be validated in the target runtime.

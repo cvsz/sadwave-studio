@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     max_render_time_seconds: int = Field(default=0, ge=0)
     ai_provider_mode: Literal["local", "explicit"] = "local"
 
-    database_url: str = "postgresql://sadwave:sadwave@localhost:5432/sadwave"
+    database_url: str = ""
 
     api_rate_limit: int = Field(default=60, ge=1, le=10000)
     api_rate_window_seconds: int = Field(default=60, ge=1, le=3600)
@@ -37,24 +37,26 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    def validate_startup(self) -> None:
-        if self.app_env in {"production", "staging"} and not self.api_token:
+    def validate_startup(self, *, require_api_token: bool = True) -> None:
+        if require_api_token and self.app_env in {"production", "staging"} and not self.api_token:
             raise ValueError("API_TOKEN is required in production/staging")
-        if self.app_env == "production" and not self.database_url:
-            raise ValueError("DATABASE_URL is required in production")
+        if self.app_env in {"production", "staging"} and not self.database_url.strip():
+            raise ValueError("DATABASE_URL is required in production/staging")
         if self.app_env == "production" and self.autonomy_level > 4:
             raise ValueError("AUTONOMY_LEVEL 5 is restricted and cannot be enabled by default")
-        if self.cost_lock and (
-            self.max_daily_api_cost > 0 or self.max_monthly_api_cost > 0
-        ) and self.ai_provider_mode != "explicit":
+        if (
+            self.cost_lock
+            and (self.max_daily_api_cost > 0 or self.max_monthly_api_cost > 0)
+            and self.ai_provider_mode != "explicit"
+        ):
             raise ValueError("Paid budgets require AI_PROVIDER_MODE=explicit")
 
 
 @lru_cache
-def get_settings() -> Settings:
+def get_settings(*, require_api_token: bool = True) -> Settings:
     settings = Settings()
     try:
-        settings.validate_startup()
+        settings.validate_startup(require_api_token=require_api_token)
     except (ValidationError, ValueError) as exc:
         raise RuntimeError(f"Invalid application configuration: {exc}") from exc
     return settings

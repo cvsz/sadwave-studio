@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 
 
@@ -55,7 +55,7 @@ class ContentJob:
             kind=kind,
             state=JobState.DRAFT,
             idempotency_key=idempotency_key,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
 
     def transition(self, target: JobState) -> "ContentJob":

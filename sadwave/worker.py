@@ -4,19 +4,20 @@ import logging
 import random
 import time
 
+import psycopg
+
 from .config import get_settings
-from .domain import JobState
-from .repository import PostgresJobRepository
+from .repository import LeaseLostError, PostgresJobRepository
 
 logger = logging.getLogger("sadwave.worker")
 
 
 def run_worker() -> None:
-    settings = get_settings()
+    settings = get_settings(require_api_token=False)
     if settings.app_env not in {"production", "staging"}:
         raise RuntimeError("Worker requires APP_ENV=staging or APP_ENV=production")
 
-    repository = PostgresJobRepository(settings.database_url)
+    repository = PostgresJobRepository(settings.database_url, settings.worker_max_attempts)
     worker_id = settings.worker_id
 
     while True:
@@ -32,30 +33,30 @@ def run_worker() -> None:
         queue_id = int(item["queue_id"])
         job_id = str(item["job_id"])
         attempts = int(item["attempts"])
+        lease_token = item["lease_token"]
 
         try:
-            job = repository.get_by_id(job_id)
-            if job is None:
-                raise RuntimeError(f"queued job {job_id} no longer exists")
-            if job.state != JobState.DRAFT:
-                raise RuntimeError(
-                    f"unsupported queued state {job.state}; refusing implicit execution"
-                )
-            repository.transition(job_id, JobState.PLANNED)
-            repository.audit(
-                actor_id=f"worker:{worker_id}",
-                action="JOB_PLANNED",
-                resource_type="content_job",
-                resource_id=job_id,
-                details={"attempt": attempts, "queue_id": queue_id},
-            )
-            repository.complete(queue_id)
-        except Exception as exc:
+            repository.complete_job(queue_id, lease_token)
+        except (KeyError, RuntimeError, ValueError, psycopg.Error) as exc:
             delay = min(3600, max(5, 2 ** min(attempts, 10))) + random.uniform(0, 3)
-            repository.fail(queue_id, str(exc), int(delay))
-            logger.exception("worker_job_failed queue_id=%s job_id=%s", queue_id, job_id)
+            try:
+                repository.fail(
+                    queue_id,
+                    lease_token,
+                    f"processing failed ({type(exc).__name__})",
+                    int(delay),
+                )
+            except LeaseLostError:
+                logger.info("worker_lease_lost queue_id=%s job_id=%s", queue_id, job_id)
+                continue
+            logger.error(
+                "worker_job_failed queue_id=%s job_id=%s error_type=%s",
+                queue_id,
+                job_id,
+                type(exc).__name__,
+            )
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=get_settings().log_level)
+    logging.basicConfig(level=get_settings(require_api_token=False).log_level)
     run_worker()

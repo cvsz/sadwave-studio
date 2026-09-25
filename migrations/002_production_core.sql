@@ -7,11 +7,14 @@ CREATE TABLE IF NOT EXISTS job_queue (
     available_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     locked_at TIMESTAMPTZ,
     locked_by TEXT,
+    lease_token UUID,
     last_error TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(job_id)
 );
+
+ALTER TABLE job_queue ADD COLUMN IF NOT EXISTS lease_token UUID;
 
 CREATE INDEX IF NOT EXISTS idx_job_queue_claim
     ON job_queue (status, available_at, queue_id);

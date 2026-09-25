@@ -10,8 +10,11 @@ All notable changes to SadwaveStudio should be documented here.
 - PostgreSQL content-job repository and migrations
 - Content-job lifecycle state machine
 - Durable PostgreSQL job queue with leases and recovery
+- Lease-token fencing and transactional worker state/audit/queue completion
 - Bounded retry and dead-letter handling
 - Immutable application audit-event persistence
+- Atomic idempotent job creation and audit persistence
+- Versioned startup migrations with restricted runtime database role
 - Database-backed API rate limiting
 - Dedicated production worker service
 - Production API bearer authentication
@@ -35,6 +38,8 @@ All notable changes to SadwaveStudio should be documented here.
 - Production/staging startup now fails closed without an API token.
 - Production API mutations require bearer authentication and idempotency keys.
 - Production API traffic receives security response headers and database-backed rate limiting.
+- API and worker database access no longer uses the PostgreSQL administrator role.
+- Dependency versions were upgraded to remove current pip, pytest, and Starlette advisories.
 - CodeQL and CI action references are pinned to immutable commits to reduce workflow supply-chain risk.
 
 ### Release status

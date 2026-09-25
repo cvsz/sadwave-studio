@@ -2,7 +2,7 @@
 
 Production-grade, secure, observable, cost-controlled automation for YouTube content operations.
 
-> **Current status: Runtime foundation implemented; full production platform is still under staged implementation.**
+> **Current status: API, PostgreSQL job queue, and worker foundation implemented; the full production platform remains gated.**
 
 ## Implemented now
 
@@ -13,8 +13,9 @@ Production-grade, secure, observable, cost-controlled automation for YouTube con
 - Bearer authentication for staging/production API mutations
 - Content-job lifecycle state machine
 - Idempotent job creation with request-conflict protection
-- PostgreSQL persistence adapter and migration
-- Production Docker image and Compose topology
+- PostgreSQL persistence, versioned migrations, durable queue, lease fencing, and audit writes
+- Restricted PostgreSQL application role; schema migrations use the separate administrator role
+- Production Docker image and Compose API/worker/migration topology
 - Ruff formatting/linting
 - Unit/API tests
 - Dependency vulnerability audit
@@ -34,16 +35,15 @@ python -m sadwave
 For a production-shaped local stack:
 
 ~~~bash
-export POSTGRES_PASSWORD='use-a-local-secret'
-export API_TOKEN='use-a-local-secret'
+export POSTGRES_PASSWORD='<random value of at least 32 characters>'
+export APP_DATABASE_PASSWORD='<a different random value of at least 32 characters>'
+export API_TOKEN='<random value of at least 32 characters>'
 docker compose up --build
 ~~~
 
-Then run the database migration:
-
-~~~bash
-docker compose exec api python scripts/migrate.py
-~~~
+Compose waits for PostgreSQL, applies pending versioned migrations, and then starts the API and worker.
+The migration service uses the PostgreSQL administrator account to provision schema and a restricted
+`sadwave_app` role. The API and worker receive only that role's password, separately from `DATABASE_URL`.
 
 The production API requires:
 
@@ -78,6 +78,8 @@ cvsz/ztemplate is reference-only and must not be modified by SadwaveStudio work.
 ## Production status
 
 Do not treat the existence of a Docker image or green unit tests as proof that the complete YouTube automation platform is production-ready. The readiness checklist is evidence-based and remains incomplete until all applicable integration, security, recovery, and operational gates pass.
+
+PostgreSQL integration tests run in CI. To run them locally, set `SADWAVE_TEST_DATABASE_URL` to a disposable PostgreSQL database before running `pytest`; migrations are applied by the test fixture.
 
 ## License
 
