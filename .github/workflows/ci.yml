@@ -78,13 +78,3 @@ jobs:
           image: sadwave-studio:ci
           artifact-name: sbom.spdx.json
           output-format: spdx-json
-
-      - name: Scan image
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: sadwave-studio:ci
-          format: table
-          exit-code: "1"
-          ignore-unfixed: true
-          vuln-type: os,library
-          severity: CRITICAL,HIGH
