@@ -1,0 +1,17 @@
+import os
+from pathlib import Path
+
+import psycopg
+
+
+def main() -> None:
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        raise SystemExit("DATABASE_URL is required")
+    sql = Path("migrations/001_initial.sql").read_text(encoding="utf-8")
+    with psycopg.connect(database_url) as connection:
+        connection.execute(sql)
+
+
+if __name__ == "__main__":
+    main()

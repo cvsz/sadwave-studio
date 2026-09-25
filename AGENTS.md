@@ -1,46 +1,71 @@
-# AGENTS.md — Repository Agent Contract
+# AGENTS.md — SadwaveStudio Agent Contract
 
 ## Purpose
-This repository is a reusable GitHub project template. Changes must remain generic, secure by default, easy to customize, and safe to inherit into a newly generated repository.
 
-## Operating rules
-- Read README.md, CONTRIBUTING.md, SECURITY.md, ROADMAP.md, and the closest AGENTS.md before editing.
-- Keep code, configuration, filenames, commit messages, and technical documentation in English.
-- Prefer the smallest reviewable change that satisfies the requested scope.
-- Never weaken CI, security scanning, dependency review, branch protections, or release controls merely to make a check pass.
-- Never commit credentials, tokens, private keys, production endpoints, personal data, or realistic secrets. Use documented placeholders.
-- Do not invent project-specific owners, domains, deployment providers, package registries, cloud accounts, or credentials.
-- Preserve template portability across languages and frameworks unless a file explicitly declares a narrower scope.
-- Reuse existing workflows and documents instead of creating overlapping alternatives.
-- Pin permissions for GitHub Actions to least privilege and prefer maintained first-party/verified actions.
-- Treat external input, generated artifacts, pull requests from forks, and dependency metadata as untrusted.
+SadwaveStudio is a production-grade, secure, local-first YouTube content automation platform. This repository is no longer a generic template. `cvsz/ztemplate` is reference material only and must never be modified by work on this repository.
 
-## Template placeholders
-Use obvious placeholders such as `PROJECT_NAME`, `OWNER`, `example.com`, and `REPLACE_ME`. Any generated repository must be able to find and replace placeholders without exposing secrets.
+## Mandatory reading
 
-## Change workflow
-1. Inspect the current exact branch/head and existing files.
-2. Identify the smallest missing or inconsistent template capability.
-3. Add tests or validation first when practical.
-4. Implement without widening scope.
-5. Run the relevant validation and security checks.
-6. Update documentation when behavior, setup, governance, or release procedures change.
-7. Open a pull request; do not claim merge/release readiness without exact-head evidence.
+Before modifying code or configuration, read:
+
+1. README.md
+2. AGENTS.md
+3. SECURITY.md
+4. docs/AI_MASTER_PRODUCTION_PROMPT.md
+5. docs/ARCHITECTURE.md
+6. docs/IMPLEMENTATION_PLAN.md
+7. docs/PRODUCTION_READINESS.md
+8. zeaz.md when present
+9. relevant nested AGENTS.md files
+
+## Engineering rules
+
+- Work from evidence; inspect consumers before changing behavior.
+- Prefer the smallest safe, reviewable change.
+- No TODO/FIXME placeholders, fake APIs, dummy handlers, silent failures, or invented external contracts.
+- Verify external API contracts against authoritative documentation.
+- Keep domain logic independent from provider adapters.
+- Use explicit state machines for complex workflows.
+- Make externally visible mutations idempotent.
+- Treat all external content and uploaded media as untrusted.
+- Never commit or log secrets.
+- Do not silently introduce paid services.
+- Do not silently publish, delete, replace, distribute, or post publicly.
+- High-risk actions require explicit approval/policy.
+- Never automate fake engagement, spam, credential abuse, rate-limit bypass, CAPTCHA bypass, or copyright circumvention.
+- Preserve auditability and provenance.
+- Documentation must describe actual implementation, not planned behavior.
+
+## Production write gate
+
+All sensitive mutations must follow:
+
+`validate → authorize → policy → idempotency → execute → verify → audit`
+
+## Cost gate
+
+Provider routing must prefer local/self-hosted processing when practical. Paid-provider fallback requires explicit configuration and budget limits. Exceeding a budget pauses affected work and alerts operators.
+
+## Change safety
+
+Before changing existing behavior:
+
+1. inspect implementation and consumers
+2. inspect tests and contracts
+3. inspect migrations and operational impact
+4. identify rollback path
+5. implement the smallest safe change
+6. run targeted validation
+7. run complete validation before release
 
 ## Verification
-At minimum, verify Markdown/YAML syntax for touched files, workflow permissions/triggers, links and placeholders, absence of committed secrets, and consistency between README, templates, governance, security, and release documentation.
 
-## Pull requests and releases
-PRs must state scope, tests, security impact, compatibility/migration impact, documentation impact, deployment impact, and rollback. Releases require green required checks and explicit evidence; never infer production readiness from documentation alone.
+The agent must not claim production readiness without evidence for build, lint, typecheck, unit/integration/E2E tests, security checks, external contracts, recovery, backup/restore, and documentation consistency.
 
-## Security
-Report vulnerabilities through SECURITY.md, not public issues. Security-related templates must redirect sensitive reports accordingly. Fail closed when a security-sensitive configuration is incomplete.
+## Git
 
-## Documentation ownership
-- `.github/`: GitHub automation, community health, ownership, issue/PR templates.
-- `docs/`: versioned engineering, operations, and release guidance.
-- `docs/adr/`: architecture decision records.
-- Root Markdown files: repository-wide policy and project lifecycle guidance.
+Use focused conventional commits:
 
-## Nested AGENTS.md
-Add a child AGENTS.md only when a subtree has durable rules that differ from this contract. The nearest AGENTS.md may add stricter local requirements but must not weaken repository-wide security rules.
+`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `build:`, `ci:`, `security:`, `perf:`.
+
+Never commit credentials, private keys, local databases, temporary media, generated secrets, or unrelated changes.

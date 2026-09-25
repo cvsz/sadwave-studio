@@ -1,78 +1,84 @@
-# zTemplate
+# SadwaveStudio
 
-A production-ready, reusable GitHub repository template for starting new projects with consistent engineering, security, documentation, automation, and release practices.
+Production-grade, secure, observable, cost-controlled automation for YouTube content operations.
 
-## Included
+> **Current status: Runtime foundation implemented; full production platform is still under staged implementation.**
 
-- Issue and pull request templates
-- CODEOWNERS and repository contribution guidance
-- Security policy and support policy
-- CI workflow baseline
-- CodeQL security scanning
-- Dependency Review for pull requests
-- Dependabot configuration
-- Release workflow and release notes configuration
-- Conventional commit / PR guidance
-- EditorConfig, Git attributes, and Git ignore baseline
-- Community health files
-- Documentation structure
-- Changelog and roadmap templates
-- Implementation checklist
-- Architecture Decision Record (ADR) template
-- Environment example
-- Docker baseline
-- Makefile task entrypoints
+## Implemented now
 
-## Start from this template
+- Python 3.12 + FastAPI runtime
+- Environment validation with production fail-closed rules
+- Request correlation IDs
+- /health, /ready, /version
+- Bearer authentication for staging/production API mutations
+- Content-job lifecycle state machine
+- Idempotent job creation with request-conflict protection
+- PostgreSQL persistence adapter and migration
+- Production Docker image and Compose topology
+- Ruff formatting/linting
+- Unit/API tests
+- Dependency vulnerability audit
+- SBOM generation
+- Cost-lock, dry-run, and autonomy controls
 
-1. Use this repository as a GitHub template repository.
-2. Create a new repository from the template.
-3. Replace placeholder project metadata.
-4. Review and customize `.github/CODEOWNERS`, `SECURITY.md`, CI matrices, and release settings.
-5. Add language/framework-specific workflows only when the project needs them.
+## Quick start
 
-## Repository structure
+~~~bash
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install -e '.[dev]'
+pytest
+python -m sadwave
+~~~
 
-```text
-.github/
-  ISSUE_TEMPLATE/
-  workflows/
-  CODEOWNERS
-  CONTRIBUTING.md
-  PULL_REQUEST_TEMPLATE.md
-  dependabot.yml
-  release.yml
-  SUPPORT.md
-docs/
-  adr/
-  architecture.md
-  development.md
-  release.md
-.env.example
-.editorconfig
-.gitattributes
-.gitignore
-CHANGELOG.md
-CODE_OF_CONDUCT.md
-Dockerfile
-IMPLEMENTATION-CHECKLIST.md
-LICENSE
-Makefile
-README.md
-ROADMAP.md
-SECURITY.md
-```
+For a production-shaped local stack:
 
-## Principles
+~~~bash
+export POSTGRES_PASSWORD='use-a-local-secret'
+export API_TOKEN='use-a-local-secret'
+docker compose up --build
+~~~
 
-- Secure by default
-- Least privilege for GitHub Actions
-- Reproducible automation
-- Small, reviewable pull requests
-- Documentation as part of delivery
-- No weakening of security gates to make CI green
-- Explicit release and rollback practices
+Then run the database migration:
+
+~~~bash
+docker compose exec api python scripts/migrate.py
+~~~
+
+The production API requires:
+
+~~~text
+Authorization: Bearer <API_TOKEN>
+X-Idempotency-Key: <unique-key>
+~~~
+
+## Safety
+
+Public mutations must follow:
+
+~~~text
+validate → authorize → policy → idempotency → execute → verify → audit
+~~~
+
+Publishing, deletion, replacement, public communication, credentials, billing, copyright-sensitive actions, and other high-risk operations remain approval-gated.
+
+The system must never automate fake engagement, spam, credential abuse, CAPTCHA/rate-limit bypass, or copyright circumvention.
+
+## Architecture and governance
+
+- Architecture: docs/ARCHITECTURE.md
+- Implementation Plan: docs/IMPLEMENTATION_PLAN.md
+- AI Master Production Prompt: docs/AI_MASTER_PRODUCTION_PROMPT.md
+- Security Model: docs/SECURITY_MODEL.md
+- Production Readiness: docs/PRODUCTION_READINESS.md
+- Agent Contract: AGENTS.md
+
+cvsz/ztemplate is reference-only and must not be modified by SadwaveStudio work.
+
+## Production status
+
+Do not treat the existence of a Docker image or green unit tests as proof that the complete YouTube automation platform is production-ready. The readiness checklist is evidence-based and remains incomplete until all applicable integration, security, recovery, and operational gates pass.
 
 ## License
 
-MIT. See `LICENSE`.
+MIT. See LICENSE.

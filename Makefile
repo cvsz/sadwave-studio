@@ -1,26 +1,35 @@
 SHELL := /bin/sh
 
-.PHONY: help setup format lint test build security ci
+.PHONY: help install format lint test typecheck validate migrate docker-build security ci
 
 help:
-	@printf '%s\n' 'Targets: setup format lint test build security ci'
+	@printf '%s\n' 'Targets: install format lint test typecheck validate migrate docker-build security ci'
 
-setup:
-	@echo 'Replace with project bootstrap command.'
+install:
+	python -m pip install -e '.[dev]'
 
 format:
-	@echo 'Replace with project formatter command.'
+	ruff format .
 
 lint:
-	@echo 'Replace with project lint command.'
+	ruff check .
 
 test:
-	@echo 'Replace with project test command.'
+	pytest
 
-build:
-	@echo 'Replace with project build command.'
+typecheck:
+	python -m compileall -q sadwave tests
+
+validate:
+	@set -eu; test -f README.md; test -f AGENTS.md; test -f SECURITY.md; test -f docs/AI_MASTER_PRODUCTION_PROMPT.md; test -f docs/ARCHITECTURE.md; test -f docs/PRODUCTION_READINESS.md; git diff --check
+
+migrate:
+	python scripts/migrate.py
+
+docker-build:
+	docker build --pull --tag sadwave-studio:local .
 
 security:
-	@echo 'Use repository security workflows and add stack-specific scanners.'
+	@set -eu; if git ls-files | grep -E '(^|/)(\.env|id_rsa|id_ed25519|.*\.pem|.*\.key)$$' | grep -v '^\.env\.example$$'; then echo 'Potential secret-bearing file is tracked.'; exit 1; fi
 
-ci: lint test build security
+ci: format lint test typecheck validate security
