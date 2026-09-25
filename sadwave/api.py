@@ -2,6 +2,7 @@ import secrets
 from uuid import uuid4
 
 from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from .application import CreateContentJob, InMemoryJobRepository
@@ -43,11 +44,9 @@ def _authorized(request: Request) -> bool:
 
 
 @app.middleware("http")
-async def request_id_and_auth_middleware(request: Request, call_next):
+async def security_middleware(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID") or str(uuid4())
     if request.url.path.startswith("/api/") and not _authorized(request):
-        from fastapi.responses import JSONResponse
-
         return JSONResponse(
             status_code=401,
             content={
@@ -60,15 +59,37 @@ async def request_id_and_auth_middleware(request: Request, call_next):
             },
             headers={"X-Request-ID": request_id},
         )
+
+    if settings.app_env == "production" and request.url.path.startswith("/api/"):
+        client_host = request.client.host if request.client else "unknown"
+        allowed = repository.allow_rate(
+            f"api:{client_host}", settings.api_rate_limit, settings.api_rate_window_seconds
+        )
+        if not allowed:
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "error": {
+                        "code": "RATE_LIMITED",
+                        "message": "rate limit exceeded",
+                        "requestId": request_id,
+                        "details": [],
+                    }
+                },
+                headers={"X-Request-ID": request_id, "Retry-After": str(settings.api_rate_window_seconds)},
+            )
+
     response = await call_next(request)
     response.headers["X-Request-ID"] = request_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Cache-Control"] = "no-store" if request.url.path.startswith("/api/") else "no-cache"
     return response
 
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    from fastapi.responses import JSONResponse
-
     request_id = request.headers.get("X-Request-ID") or "unknown"
     return JSONResponse(
         status_code=exc.status_code,
@@ -105,6 +126,7 @@ def version() -> dict[str, str]:
 
 @app.post("/api/v1/content/jobs", response_model=JobResponse, status_code=201)
 def create_job(
+    request: Request,
     payload: CreateJobRequest,
     x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
 ) -> JobResponse:
@@ -119,6 +141,17 @@ def create_job(
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    if settings.app_env == "production":
+        repository.audit(
+            actor_id="api:authenticated",
+            action="CONTENT_JOB_CREATED",
+            resource_type="content_job",
+            resource_id=job.job_id,
+            request_id=request.headers.get("X-Request-ID"),
+            details={"channel_id": job.channel_id, "kind": job.kind},
+        )
+
     return JobResponse(
         job_id=job.job_id,
         channel_id=job.channel_id,
