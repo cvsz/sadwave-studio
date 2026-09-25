@@ -1,78 +1,55 @@
-# zTemplate
+# SadwaveStudio
 
-A production-ready, reusable GitHub repository template for starting new projects with consistent engineering, security, documentation, automation, and release practices.
+Production-grade, secure, observable, cost-controlled automation for YouTube content operations.
 
-## Included
+> **Status: Foundation / not production-ready.** The repository currently contains the hardened project baseline and architecture contract. Application capabilities are being implemented incrementally behind explicit readiness gates.
 
-- Issue and pull request templates
-- CODEOWNERS and repository contribution guidance
-- Security policy and support policy
-- CI workflow baseline
-- CodeQL security scanning
-- Dependency Review for pull requests
-- Dependabot configuration
-- Release workflow and release notes configuration
-- Conventional commit / PR guidance
-- EditorConfig, Git attributes, and Git ignore baseline
-- Community health files
-- Documentation structure
-- Changelog and roadmap templates
-- Implementation checklist
-- Architecture Decision Record (ADR) template
-- Environment example
-- Docker baseline
-- Makefile task entrypoints
+## Mission
 
-## Start from this template
+SadwaveStudio is designed to continuously support:
 
-1. Use this repository as a GitHub template repository.
-2. Create a new repository from the template.
-3. Replace placeholder project metadata.
-4. Review and customize `.github/CODEOWNERS`, `SECURITY.md`, CI matrices, and release settings.
-5. Add language/framework-specific workflows only when the project needs them.
+- YouTube channel synchronization and intelligence
+- content opportunity discovery and planning
+- AI-assisted scripts, metadata, subtitles, translations, and thumbnails
+- deterministic media processing and Shorts candidates
+- approval-gated publishing and distribution
+- analytics, experiments, anomaly detection, and recommendations
+- community/comment intelligence
+- provenance, auditability, security, and cost controls
+- local-first AI with provider independence
 
-## Repository structure
+## Safety model
 
-```text
-.github/
-  ISSUE_TEMPLATE/
-  workflows/
-  CODEOWNERS
-  CONTRIBUTING.md
-  PULL_REQUEST_TEMPLATE.md
-  dependabot.yml
-  release.yml
-  SUPPORT.md
-docs/
-  adr/
-  architecture.md
-  development.md
-  release.md
-.env.example
-.editorconfig
-.gitattributes
-.gitignore
-CHANGELOG.md
-CODE_OF_CONDUCT.md
-Dockerfile
-IMPLEMENTATION-CHECKLIST.md
-LICENSE
-Makefile
-README.md
-ROADMAP.md
-SECURITY.md
-```
+High-risk operations use:
 
-## Principles
+`validate → authorize → policy → idempotency → execute → verify → audit`
 
-- Secure by default
-- Least privilege for GitHub Actions
-- Reproducible automation
-- Small, reviewable pull requests
-- Documentation as part of delivery
-- No weakening of security gates to make CI green
-- Explicit release and rollback practices
+Publishing, deletion, replacement, public communication, credential changes, billing changes, copyright-sensitive actions, and policy-sensitive content require explicit approval unless an enabled autonomy policy permits them.
+
+The system must never automate fake engagement, spam, credential abuse, CAPTCHA bypass, rate-limit bypass, or copyright circumvention.
+
+## Architecture
+
+See:
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Implementation Plan](docs/IMPLEMENTATION_PLAN.md)
+- [AI Master Production Prompt](docs/AI_MASTER_PRODUCTION_PROMPT.md)
+- [Security Model](docs/SECURITY_MODEL.md)
+- [Production Readiness](docs/PRODUCTION_READINESS.md)
+
+Target boundaries include API, dashboard, workers, domain/application services, provider adapters, persistence, queues, object storage, media processing, AI, publishing, distribution, analytics, and audit.
+
+## Source of truth
+
+`cvsz/ztemplate` is the architectural/reference baseline only. SadwaveStudio must adapt the template rather than modify or blindly copy it.
+
+## Development contract
+
+Read [AGENTS.md](AGENTS.md) before making changes.
+
+Production readiness requires evidence, not generated files or documentation alone.
 
 ## License
 
-MIT. See `LICENSE`.
+MIT. See [LICENSE](LICENSE).
