@@ -1,0 +1,1 @@
+"""SadwaveStudio application package."""
