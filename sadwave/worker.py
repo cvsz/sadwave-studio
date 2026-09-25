@@ -34,40 +34,26 @@ def run_worker() -> None:
         attempts = int(item["attempts"])
 
         try:
-            # The production core owns execution safety; domain-specific handlers are
-            # intentionally selected by explicit job kind rather than guessed.
-            job = repository.get_by_idempotency_key(_idempotency_for_job(repository, job_id))
+            job = repository.get_by_id(job_id)
             if job is None:
                 raise RuntimeError(f"queued job {job_id} no longer exists")
-            if job.state == JobState.DRAFT:
-                repository.transition(job_id, JobState.PLANNED)
-                repository.audit(
-                    actor_id=f"worker:{worker_id}",
-                    action="JOB_PLANNED",
-                    resource_type="content_job",
-                    resource_id=job_id,
-                    details={"attempt": attempts, "queue_id": queue_id},
-                )
-            else:
+            if job.state != JobState.DRAFT:
                 raise RuntimeError(
                     f"unsupported queued state {job.state}; refusing implicit execution"
                 )
+            repository.transition(job_id, JobState.PLANNED)
+            repository.audit(
+                actor_id=f"worker:{worker_id}",
+                action="JOB_PLANNED",
+                resource_type="content_job",
+                resource_id=job_id,
+                details={"attempt": attempts, "queue_id": queue_id},
+            )
             repository.complete(queue_id)
         except Exception as exc:
             delay = min(3600, max(5, 2 ** min(attempts, 10))) + random.uniform(0, 3)
             repository.fail(queue_id, str(exc), int(delay))
             logger.exception("worker_job_failed queue_id=%s job_id=%s", queue_id, job_id)
-
-
-def _idempotency_for_job(repository: PostgresJobRepository, job_id: str) -> str:
-    with repository._connect() as connection:
-        row = connection.execute(
-            "SELECT idempotency_key FROM content_jobs WHERE job_id = %s",
-            (job_id,),
-        ).fetchone()
-    if row is None:
-        raise RuntimeError(f"job {job_id} not found")
-    return str(row["idempotency_key"])
 
 
 if __name__ == "__main__":
