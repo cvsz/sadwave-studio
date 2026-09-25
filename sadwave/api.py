@@ -6,9 +6,14 @@ from pydantic import BaseModel, Field
 from .application import CreateContentJob, InMemoryJobRepository
 from .config import get_settings
 from .domain import JobState
+from .repository import PostgresJobRepository
 
 settings = get_settings()
-repository = InMemoryJobRepository()
+repository = (
+    PostgresJobRepository(settings.database_url)
+    if settings.app_env == "production"
+    else InMemoryJobRepository()
+)
 create_content_job = CreateContentJob(repository)
 
 app = FastAPI(title=settings.app_name, version="0.1.0")
@@ -42,7 +47,11 @@ def health() -> dict[str, str]:
 
 @app.get("/ready")
 def ready() -> dict[str, str]:
-    # Dependency readiness will be extended when PostgreSQL/queue adapters are enabled.
+    if settings.app_env == "production":
+        try:
+            repository.healthcheck()
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail="database unavailable") from exc
     return {"status": "ready", "service": "sadwave-studio"}
 
 
