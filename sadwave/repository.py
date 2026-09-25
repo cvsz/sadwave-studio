@@ -1,6 +1,7 @@
+import json
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Protocol
+from typing import Any
+from uuid import UUID, uuid4
 
 import psycopg
 from psycopg.rows import dict_row
@@ -8,48 +9,57 @@ from psycopg.rows import dict_row
 from .domain import ContentJob, JobState
 
 
-class JobStore(Protocol):
-    def get_by_idempotency_key(self, key: str) -> ContentJob | None: ...
-    def save(self, job: ContentJob) -> None: ...
-    def transition(self, job_id: str, target: JobState) -> ContentJob: ...
-    def healthcheck(self) -> None: ...
+class LeaseLostError(RuntimeError):
+    """The worker no longer owns the queue item's current lease."""
 
 
 @dataclass(slots=True)
 class PostgresJobRepository:
     database_url: str
+    max_attempts: int = 5
+
+    def __post_init__(self) -> None:
+        if not 1 <= self.max_attempts <= 20:
+            raise ValueError("max_attempts must be between 1 and 20")
 
     def _connect(self):
         return psycopg.connect(self.database_url, row_factory=dict_row)
 
     def healthcheck(self) -> None:
+        required_tables = (
+            "schema_migrations",
+            "content_jobs",
+            "job_queue",
+            "audit_events",
+            "rate_limit_buckets",
+        )
         with self._connect() as connection:
-            connection.execute("SELECT 1")
+            rows = connection.execute(
+                "SELECT "
+                + ", ".join(
+                    f"to_regclass('public.{table}') AS {table}" for table in required_tables
+                )
+            ).fetchone()
+        if rows is None:
+            raise RuntimeError("database schema is unavailable")
+        if any(rows[table] is None for table in required_tables):
+            raise RuntimeError("database schema is not fully migrated")
 
-    def get_by_idempotency_key(self, key: str) -> ContentJob | None:
+    def create_if_absent(
+        self,
+        job: ContentJob,
+        *,
+        actor_id: str | None = None,
+        request_id: str | None = None,
+    ) -> tuple[ContentJob, bool]:
         with self._connect() as connection:
             row = connection.execute(
-                """
-                SELECT job_id, channel_id, kind, state, idempotency_key, created_at
-                FROM content_jobs WHERE idempotency_key = %s
-                """,
-                (key,),
-            ).fetchone()
-        return self._to_domain(row) if row else None
-
-    def save(self, job: ContentJob) -> None:
-        with self._connect() as connection:
-            connection.execute(
                 """
                 INSERT INTO content_jobs
                     (job_id, channel_id, kind, state, idempotency_key, created_at)
                 VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (job_id) DO UPDATE SET
-                    channel_id = EXCLUDED.channel_id,
-                    kind = EXCLUDED.kind,
-                    state = EXCLUDED.state,
-                    idempotency_key = EXCLUDED.idempotency_key
-                WHERE content_jobs.idempotency_key = EXCLUDED.idempotency_key
+                ON CONFLICT (idempotency_key) DO NOTHING
+                RETURNING job_id, channel_id, kind, state, idempotency_key, created_at
                 """,
                 (
                     job.job_id,
@@ -59,53 +69,221 @@ class PostgresJobRepository:
                     job.idempotency_key,
                     job.created_at,
                 ),
-            )
+            ).fetchone()
+            created = row is not None
+            if row is None:
+                row = connection.execute(
+                    """
+                    SELECT job_id, channel_id, kind, state, idempotency_key, created_at
+                    FROM content_jobs WHERE idempotency_key = %s
+                    """,
+                    (job.idempotency_key,),
+                ).fetchone()
+                if row is None:
+                    raise RuntimeError("idempotency conflict row could not be read")
+            stored = self._to_domain(row)
+            if created:
+                connection.execute(
+                    """
+                    INSERT INTO job_queue (job_id, status, max_attempts)
+                    VALUES (%s, 'READY', %s) ON CONFLICT (job_id) DO NOTHING
+                    """,
+                    (job.job_id, self.max_attempts),
+                )
+                if actor_id is not None:
+                    self._insert_audit(
+                        connection,
+                        actor_id=actor_id,
+                        action="CONTENT_JOB_CREATED",
+                        resource_type="content_job",
+                        resource_id=job.job_id,
+                        request_id=request_id,
+                        details={"channel_id": job.channel_id, "kind": job.kind},
+                    )
+            return stored, created
 
-    def transition(self, job_id: str, target: JobState) -> ContentJob:
+    def claim_next(self, worker_id: str, lease_seconds: int = 300) -> dict[str, Any] | None:
+        if not worker_id.strip():
+            raise ValueError("worker_id is required")
+        if lease_seconds < 30 or lease_seconds > 3600:
+            raise ValueError("lease_seconds must be between 30 and 3600")
+        lease_token = uuid4()
         with self._connect() as connection:
+            row = connection.execute(
+                """
+                WITH candidate AS (
+                    SELECT queue_id FROM job_queue
+                    WHERE status = 'READY' AND available_at <= NOW()
+                    ORDER BY queue_id FOR UPDATE SKIP LOCKED LIMIT 1
+                )
+                UPDATE job_queue q
+                SET status = 'RUNNING', attempts = q.attempts + 1,
+                    locked_at = NOW(), locked_by = %s, lease_token = %s, updated_at = NOW()
+                FROM candidate
+                WHERE q.queue_id = candidate.queue_id
+                RETURNING q.queue_id, q.job_id, q.attempts, q.max_attempts,
+                          q.locked_at, q.locked_by, q.lease_token
+                """,
+                (worker_id, lease_token),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def complete_job(self, queue_id: int, lease_token: UUID | str) -> ContentJob:
+        with self._connect() as connection:
+            queue = connection.execute(
+                """
+                SELECT job_id, attempts, locked_by FROM job_queue
+                WHERE queue_id = %s AND status = 'RUNNING' AND lease_token = %s
+                FOR UPDATE
+                """,
+                (queue_id, lease_token),
+            ).fetchone()
+            if queue is None:
+                raise LeaseLostError("worker lease is no longer current")
             row = connection.execute(
                 """
                 SELECT job_id, channel_id, kind, state, idempotency_key, created_at
                 FROM content_jobs WHERE job_id = %s FOR UPDATE
                 """,
-                (job_id,),
+                (queue["job_id"],),
             ).fetchone()
             if row is None:
-                raise KeyError("Job not found")
-            current = self._to_domain(row)
-            updated = current.transition(target)
+                raise KeyError("Queued job not found")
+            job = self._to_domain(row)
+            updated = job.transition(JobState.PLANNED)
             connection.execute(
                 "UPDATE content_jobs SET state = %s WHERE job_id = %s",
-                (updated.state.value, job_id),
+                (updated.state.value, updated.job_id),
             )
-        return updated
+            self._insert_audit(
+                connection,
+                actor_id=f"worker:{queue['locked_by']}",
+                action="JOB_PLANNED",
+                resource_type="content_job",
+                resource_id=updated.job_id,
+                details={"attempt": queue["attempts"], "queue_id": queue_id},
+            )
+            changed = connection.execute(
+                """
+                UPDATE job_queue
+                SET status = 'DONE', locked_at = NULL, locked_by = NULL,
+                    lease_token = NULL, updated_at = NOW()
+                WHERE queue_id = %s AND status = 'RUNNING' AND lease_token = %s
+                """,
+                (queue_id, lease_token),
+            ).rowcount
+            if changed != 1:
+                raise LeaseLostError("worker lease changed before completion")
+            return updated
+
+    def fail(
+        self,
+        queue_id: int,
+        lease_token: UUID | str,
+        error: str,
+        retry_delay_seconds: int = 30,
+    ) -> None:
+        if not error.strip():
+            raise ValueError("error is required")
+        if retry_delay_seconds < 1 or retry_delay_seconds > 86400:
+            raise ValueError("retry_delay_seconds must be between 1 and 86400")
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT attempts, max_attempts FROM job_queue
+                WHERE queue_id = %s AND status = 'RUNNING' AND lease_token = %s FOR UPDATE
+                """,
+                (queue_id, lease_token),
+            ).fetchone()
+            if row is None:
+                raise LeaseLostError("worker lease is no longer current")
+            status = "DEAD" if row["attempts"] >= row["max_attempts"] else "READY"
+            updated = connection.execute(
+                """
+                UPDATE job_queue
+                SET status = %s, available_at = NOW() + (%s * INTERVAL '1 second'),
+                    locked_at = NULL, locked_by = NULL, lease_token = NULL,
+                    last_error = %s, updated_at = NOW()
+                WHERE queue_id = %s AND status = 'RUNNING' AND lease_token = %s
+                """,
+                (status, retry_delay_seconds, error[:4000], queue_id, lease_token),
+            ).rowcount
+            if updated != 1:
+                raise LeaseLostError("worker lease changed before failure was recorded")
+
+    def recover_expired_leases(self, lease_seconds: int = 300) -> int:
+        with self._connect() as connection:
+            result = connection.execute(
+                """
+                UPDATE job_queue
+                SET status = CASE WHEN attempts >= max_attempts THEN 'DEAD' ELSE 'READY' END,
+                    available_at = NOW(), locked_at = NULL, locked_by = NULL,
+                    lease_token = NULL,
+                    last_error = COALESCE(last_error, 'worker lease expired'), updated_at = NOW()
+                WHERE status = 'RUNNING' AND locked_at < NOW() - (%s * INTERVAL '1 second')
+                """,
+                (lease_seconds,),
+            )
+            return result.rowcount
+
+    def allow_rate(self, bucket_key: str, limit: int, window_seconds: int = 60) -> bool:
+        if not bucket_key.strip() or limit < 1 or window_seconds < 1:
+            raise ValueError("invalid rate-limit parameters")
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                INSERT INTO rate_limit_buckets (bucket_key, window_started_at, request_count)
+                VALUES (%s, NOW(), 1)
+                ON CONFLICT (bucket_key) DO UPDATE SET
+                    window_started_at = CASE
+                        WHEN rate_limit_buckets.window_started_at <= NOW() - (%s * INTERVAL '1 second')
+                        THEN NOW() ELSE rate_limit_buckets.window_started_at END,
+                    request_count = CASE
+                        WHEN rate_limit_buckets.window_started_at <= NOW() - (%s * INTERVAL '1 second')
+                        THEN 1 ELSE rate_limit_buckets.request_count + 1 END
+                WHERE rate_limit_buckets.window_started_at <= NOW() - (%s * INTERVAL '1 second')
+                   OR rate_limit_buckets.request_count < %s
+                RETURNING bucket_key
+                """,
+                (bucket_key, window_seconds, window_seconds, window_seconds, limit),
+            ).fetchone()
+            return row is not None
 
     @staticmethod
-    def _to_domain(row: dict) -> ContentJob:
+    def _insert_audit(
+        connection,
+        *,
+        actor_id: str,
+        action: str,
+        resource_type: str,
+        resource_id: str,
+        request_id: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        connection.execute(
+            """
+            INSERT INTO audit_events
+                (event_id, actor_id, action, resource_type, resource_id, request_id, details)
+            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb)
+            """,
+            (
+                uuid4(),
+                actor_id[:256],
+                action[:128],
+                resource_type[:128],
+                resource_id[:256],
+                request_id[:256] if request_id else None,
+                json.dumps(details or {}, separators=(",", ":")),
+            ),
+        )
+
+    @staticmethod
+    def _to_domain(row: dict[str, Any]) -> ContentJob:
         return ContentJob(
-            job_id=row["job_id"],
+            job_id=str(row["job_id"]),
             channel_id=row["channel_id"],
             kind=row["kind"],
             state=JobState(row["state"]),
             idempotency_key=row["idempotency_key"],
             created_at=row["created_at"],
         )
-
-
-class InMemoryJobStore:
-    def __init__(self) -> None:
-        from .application import InMemoryJobRepository
-
-        self._inner = InMemoryJobRepository()
-
-    def get_by_idempotency_key(self, key: str) -> ContentJob | None:
-        return self._inner.get_by_idempotency_key(key)
-
-    def save(self, job: ContentJob) -> None:
-        self._inner.save(job)
-
-    def transition(self, job_id: str, target: JobState) -> ContentJob:
-        raise NotImplementedError("In-memory transition is intentionally not used for production")
-
-    def healthcheck(self) -> None:
-        return None

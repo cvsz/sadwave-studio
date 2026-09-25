@@ -2,7 +2,7 @@
 
 ## Status
 
-Architecture foundation approved. The repository currently contains the inherited template baseline; application implementation must be added incrementally and validated.
+The current runtime implements a FastAPI API, PostgreSQL job and queue storage, a dedicated worker, versioned migrations, and audit events. YouTube, AI, media, object storage, dashboard, and publishing adapters remain planned capabilities.
 
 ## Architectural principles
 
@@ -17,33 +17,15 @@ Architecture foundation approved. The repository currently contains the inherite
 9. Human approval is mandatory for configured high-risk actions.
 10. Observability is part of the application contract.
 
-## Target logical topology
+## Current runtime topology
 
 ```text
-Dashboard / CLI
-      │
-      ▼
-     API
-      │
-      ├── Domain / Application
-      │       ├── Content
-      │       ├── Media
-      │       ├── Analytics
-      │       ├── Publishing
-      │       ├── Distribution
-      │       ├── AI
-      │       └── Audit / Policy
-      │
-      ├── PostgreSQL
-      ├── Queue
-      ├── Object Storage
-      └── Provider Adapters
-              ├── YouTube
-              ├── AI
-              ├── Media
-              ├── Notifications
-              └── Distribution
+API ─────┐
+         ├── PostgreSQL: content jobs, queue, audit events, rate limits
+Worker ──┘
 ```
+
+Dashboard/CLI, provider adapters, and object storage are not implemented yet.
 
 ## Proposed repository shape
 

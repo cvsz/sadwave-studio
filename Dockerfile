@@ -12,7 +12,7 @@ COPY sadwave ./sadwave
 COPY migrations ./migrations
 COPY scripts ./scripts
 
-RUN python -m pip install --upgrade pip==25.2 \
+RUN python -m pip install --upgrade pip==26.2.1 \
     && python -m pip install .
 
 USER 10001
