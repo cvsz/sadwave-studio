@@ -1,3 +1,4 @@
+import secrets
 from uuid import uuid4
 
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -32,12 +33,41 @@ class JobResponse(BaseModel):
     idempotency_key: str
 
 
+def _authorized(request: Request) -> bool:
+    if settings.app_env not in {"production", "staging"}:
+        return True
+    provided = request.headers.get("Authorization", "")
+    if not provided.startswith("Bearer "):
+        return False
+    return secrets.compare_digest(provided[7:], settings.api_token or "")
+
+
 @app.middleware("http")
-async def request_id_middleware(request: Request, call_next):
+async def request_id_and_auth_middleware(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID") or str(uuid4())
+    if request.url.path.startswith("/api/") and not _authorized(request):
+        return HTTPException(status_code=401, detail="unauthorized")
     response = await call_next(request)
     response.headers["X-Request-ID"] = request_id
     return response
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    from fastapi.responses import JSONResponse
+
+    request_id = request.headers.get("X-Request-ID") or "unknown"
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "code": "UNAUTHORIZED" if exc.status_code == 401 else "REQUEST_ERROR",
+                "message": str(exc.detail),
+                "requestId": request_id,
+                "details": [],
+            }
+        },
+    )
 
 
 @app.get("/health")
@@ -49,7 +79,7 @@ def health() -> dict[str, str]:
 def ready() -> dict[str, str]:
     if settings.app_env == "production":
         try:
-            repository.healthcheck()
+            repository.healthcheck()  # type: ignore[attr-defined]
         except Exception as exc:
             raise HTTPException(status_code=503, detail="database unavailable") from exc
     return {"status": "ready", "service": "sadwave-studio"}
