@@ -1,7 +1,10 @@
 import os
 import secrets
+import select
+import signal
 import subprocess
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from uuid import uuid4
@@ -354,6 +357,147 @@ def test_expired_last_lease_fails_job_and_audits_dead_letter(repository):
     assert state == JobState.FAILED.value
     assert queue == ("DEAD", None)
     assert action == "JOB_FAILED"
+
+
+@pytest.mark.skipif(os.name != "posix", reason="worker crash signaling requires POSIX")
+def test_worker_process_restart_recovers_a_crashed_lease(repository):
+    job = ContentJob.create(
+        str(uuid4()),
+        "channel-integration",
+        "SHORT",
+        f"lease-integration-crash-{uuid4()}",
+    )
+    stored, created = repository.create_if_absent(job)
+    assert created
+
+    crash_worker_id = f"worker-crash-{uuid4()}"
+    crash_environment = {
+        "PATH": os.environ.get("PATH", ""),
+        "PYTHONPATH": str(PROJECT_DIR),
+        "DATABASE_URL": APP_TEST_DATABASE_URL,
+        "TEST_WORKER_ID": crash_worker_id,
+    }
+    claim_script = """
+import os
+import time
+from sadwave import worker
+from sadwave.config import Settings
+
+def hold_after_claim(_repository, queue_id, _lease_token):
+    print(f"lease-claimed:{queue_id}", flush=True)
+    while True:
+        time.sleep(60)
+
+worker.PostgresJobRepository.block_unhandled_job = hold_after_claim
+worker.run_worker(
+    settings=Settings(
+        app_env="production",
+        database_url=os.environ["DATABASE_URL"],
+        worker_id=os.environ["TEST_WORKER_ID"],
+        worker_lease_seconds=30,
+        worker_poll_seconds=0.1,
+    )
+)
+"""
+    crashed_worker = subprocess.Popen(
+        [sys.executable, "-c", claim_script],
+        cwd=PROJECT_DIR,
+        env=crash_environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    try:
+        assert crashed_worker.stdout is not None
+        readable, _, _ = select.select([crashed_worker.stdout], [], [], 10)
+        assert readable, "worker did not claim the job before the startup timeout"
+        claim = crashed_worker.stdout.readline().strip()
+        assert claim.startswith("lease-claimed:")
+        queue_id = int(claim.removeprefix("lease-claimed:"))
+        crashed_worker.kill()
+        assert crashed_worker.wait(timeout=10) == -signal.SIGKILL
+    finally:
+        if crashed_worker.poll() is None:
+            crashed_worker.kill()
+            crashed_worker.wait(timeout=10)
+
+    with psycopg.connect(TEST_DATABASE_URL) as connection:
+        crashed_lease = connection.execute(
+            """
+            SELECT job_id::text, status, locked_by, lease_token IS NOT NULL
+            FROM job_queue WHERE queue_id = %s
+            """,
+            (queue_id,),
+        ).fetchone()
+        assert crashed_lease == (stored.job_id, "RUNNING", crash_worker_id, True)
+        expired = connection.execute(
+            """
+            UPDATE job_queue
+            SET locked_at = NOW() - INTERVAL '1 hour'
+            WHERE queue_id = %s AND status = 'RUNNING' AND locked_by = %s
+            """,
+            (queue_id, crash_worker_id),
+        ).rowcount
+        assert expired == 1
+
+    restart_worker_id = f"worker-restart-{uuid4()}"
+    restart_environment = {
+        "PATH": os.environ.get("PATH", ""),
+        "PYTHONPATH": str(PROJECT_DIR),
+        "APP_ENV": "production",
+        "DATABASE_URL": APP_TEST_DATABASE_URL,
+        "WORKER_ID": restart_worker_id,
+        "WORKER_LEASE_SECONDS": "30",
+        "WORKER_POLL_SECONDS": "0.1",
+        "LOG_LEVEL": "INFO",
+    }
+    restarted_worker = subprocess.Popen(
+        [sys.executable, "-m", "sadwave.worker"],
+        cwd=PROJECT_DIR,
+        env=restart_environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    try:
+        deadline = time.monotonic() + 10
+        recovered = False
+        while time.monotonic() < deadline:
+            if restarted_worker.poll() is not None:
+                output, _ = restarted_worker.communicate()
+                pytest.fail(f"restarted worker exited before recovery: {output}")
+            with psycopg.connect(TEST_DATABASE_URL) as connection:
+                result = connection.execute(
+                    """
+                    SELECT job.state, queue.status,
+                        (SELECT COUNT(*) FROM audit_events
+                         WHERE resource_id = job.job_id::text
+                           AND action = 'JOB_LEASE_RECOVERED'),
+                        (SELECT COUNT(*) FROM audit_events
+                         WHERE resource_id = job.job_id::text
+                           AND action = 'JOB_BLOCKED')
+                    FROM content_jobs AS job
+                    JOIN job_queue AS queue USING (job_id)
+                    WHERE job.job_id = %s
+                    """,
+                    (stored.job_id,),
+                ).fetchone()
+            if result == (JobState.BLOCKED.value, "DEAD", 1, 1):
+                recovered = True
+                break
+            time.sleep(0.1)
+
+        assert recovered, "restarted worker did not recover and audit the abandoned job"
+        restarted_worker.send_signal(signal.SIGTERM)
+        output, _ = restarted_worker.communicate(timeout=10)
+        assert restarted_worker.returncode == 0
+        assert "recovered_expired_leases count=1" in output
+        assert "worker_job_blocked" in output
+        assert "worker_shutdown_complete" in output
+    finally:
+        if restarted_worker.poll() is None:
+            restarted_worker.kill()
+            restarted_worker.communicate(timeout=10)
 
 
 @pytest.mark.parametrize("lease_seconds", [0, 29, 3601])

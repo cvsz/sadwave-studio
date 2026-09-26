@@ -90,7 +90,7 @@ The complete YouTube automation platform is **not yet production-ready** because
 - [x] Dependency audit gate
 - [x] Focused PostgreSQL integration tests for idempotency, rate limits, and lease fencing
 - [x] Retry/dead-letter and terminal expired-lease behavior tests against PostgreSQL
-- [ ] Worker process crash/restart recovery test
+- [x] Worker process crash/restart recovery test against disposable PostgreSQL
 - [ ] Provider contract tests
 - [ ] Media tests
 - [ ] Security tests
@@ -116,10 +116,10 @@ The complete YouTube automation platform is **not yet production-ready** because
 
 ## Validation evidence for this change
 
-- **PASS — Local tests:** 42 tests passed with Python 3.12 and disposable PostgreSQL 17.6, including role-ownership rejection, finite configuration bounds, request-body limits, retry/dead-letter, terminal lease recovery, stale-lease fencing, idempotency, and rate limits.
-- **PASS — Local code checks:** Ruff format check, Ruff lint, and Python compilation.
-- **PASS — Local repository/runtime checks:** `make validate`, secret-filename check, Compose configuration, GitHub YAML parsing, and Docker image build.
+- **PASS — Local tests:** 45 tests passed with Python 3.12 and disposable PostgreSQL 17.6. The worker crash/restart test killed a process after it claimed a job, then verified that a production-mode worker recovered the lease, blocked the unhandled job, and wrote both recovery and block audit events.
+- **PASS — Local code checks:** Ruff 0.13.1 format check, Ruff lint, and Python compilation.
+- **PASS — Local repository checks:** `make validate`, `make security`, `git diff --check`, and Compose configuration validation with synthetic placeholders.
 - **PASS with scope limit — Dependency audit:** `pip-audit` reported no known vulnerabilities; the local `sadwave-studio` distribution was skipped because it is not published on PyPI, while its installed dependencies were audited.
-- **PENDING — Hosted/external gates:** GitHub CI/CodeQL, production deployment, backup/restore, rollback, provider-contract, full security, end-to-end, and full worker crash/restart evidence.
+- **PENDING — Hosted/external gates:** this change's GitHub CI/CodeQL and maintainer review; production deployment and crash/restart evidence, backup/restore, rollback, provider-contract, full security, and end-to-end validation.
 
 A production claim requires evidence for every applicable gate. A code path or checklist item is not complete merely because it exists; it must be validated in the target runtime.
