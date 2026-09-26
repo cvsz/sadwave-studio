@@ -71,6 +71,7 @@ The complete YouTube automation platform is **not yet production-ready** because
 - [x] Security response headers
 - [x] CI third-party action SHA pinning
 - [x] CodeQL workflow SHA pinning
+- [x] Docker build-context allowlist excludes local secrets and artifacts
 - [ ] RBAC/authorization model
 - [ ] CSRF/CORS policy appropriate to deployed UI
 - [ ] Container vulnerability scan with a currently trusted scanner

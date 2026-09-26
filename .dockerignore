@@ -1,0 +1,9 @@
+**
+!Dockerfile
+!pyproject.toml
+!sadwave/
+!sadwave/**
+!migrations/
+!migrations/**
+!scripts/
+!scripts/**
