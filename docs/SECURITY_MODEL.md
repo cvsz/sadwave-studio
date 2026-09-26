@@ -50,3 +50,11 @@ At the current implementation baseline, no paid-provider calls or content proces
 Audit sensitive actions including authentication events, credential changes, publishing, deletion, metadata changes, approval decisions, provider changes, budget changes, workflow changes, and role changes.
 
 Normal application paths must not permit mutation of historical audit records.
+
+## Backup artifacts
+
+Logical database archives contain application data and must be handled as sensitive data. The backup
+utility writes mode-0600 files, removes database passwords from client arguments, and uses a
+temporary mode-0600 libpq password file when a password is supplied through the environment or
+connection string. Operators remain responsible for restricted backup directories, encryption,
+retention, and off-host storage. Restore only archives from trusted sources into a new empty database.
