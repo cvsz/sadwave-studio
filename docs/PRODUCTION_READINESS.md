@@ -129,7 +129,8 @@ The complete YouTube automation platform is **not yet production-ready** because
 - **PASS — Dependency audit:** `pip-audit` found no known vulnerabilities; the local package was skipped because it is not published on PyPI.
 - **PASS — Container checks:** Compose configuration validated with synthetic placeholders, and `docker build --pull -t sadwave-studio:review .` completed.
 - **PASS — Container smoke check:** the supported API entrypoint emitted valid JSON request logs with route and method while omitting a query-token sentinel and caller-provided request ID.
-- **PENDING — Hosted PR checks and required review:** these must pass before merge because this change defines a production logging/privacy boundary.
+- **PASS — Hosted checks:** application, container, dependency-review, CodeQL, and Analyze GitHub Actions passed for PR #9 head `0c58a95`.
+- **PENDING — Required maintainer review:** this change defines a production logging/privacy boundary and remains open until the required review is present.
 - **PENDING — Production/external gates:** deployment and runtime logging verification, metrics, traces, alerts, backup/restore, rollback, provider-contract, full security, and end-to-end validation.
 
 A production claim requires evidence for every applicable gate. A code path or checklist item is not complete merely because it exists; it must be validated in the target runtime.
