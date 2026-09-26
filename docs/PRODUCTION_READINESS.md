@@ -8,7 +8,7 @@ This file is the authoritative checklist for declaring SadwaveStudio production-
 
 The repository implements a durable PostgreSQL-backed queue, lease fencing and recovery, bounded retries, transactional audit writes, atomic idempotency, database-backed API rate limiting, common request/error handling, versioned migrations, production Compose topology, and pinned CI actions. The worker has no content processors; queued work is explicitly blocked and dead-lettered with an audit event. These capabilities still require hosted CI and operational evidence before release claims.
 
-The complete YouTube automation platform is **not yet production-ready** because YouTube OAuth/synchronization, provider contracts, media isolation, AI execution, dashboard/RBAC, backup/restore evidence, and full integration/E2E/recovery evidence are still outstanding.
+The complete YouTube automation platform is **not yet production-ready** because YouTube OAuth/synchronization, provider contracts, media isolation, AI execution, dashboard/RBAC, automated backup retention and off-host protection, production recovery objectives, and full integration/E2E/recovery evidence are still outstanding. A disposable local PostgreSQL restore drill has passed; this is not production recovery evidence.
 
 ## Implemented capability checklist
 
@@ -43,8 +43,9 @@ The complete YouTube automation platform is **not yet production-ready** because
 - [x] Compose PostgreSQL dependency health
 - [x] Dedicated worker service
 - [ ] Object storage
-- [ ] Backup
-- [ ] Restore verification
+- [x] On-demand PostgreSQL logical backup utility
+- [x] Restore runbook and disposable PostgreSQL restore drill
+- [ ] Automated scheduling, retention, encrypted off-host copy, and point-in-time recovery
 - [ ] Production resource limits and runtime isolation
 - [ ] Migration rollback policy
 
@@ -96,7 +97,7 @@ The complete YouTube automation platform is **not yet production-ready** because
 - [ ] Security tests
 - [ ] E2E tests
 - [x] Retry/dead-letter tests against disposable PostgreSQL
-- [ ] Backup/restore test
+- [x] Backup/restore test against disposable PostgreSQL
 
 ### Operations
 
@@ -108,19 +109,30 @@ The complete YouTube automation platform is **not yet production-ready** because
 - [ ] Traces
 - [ ] Alerts
 - [ ] Cost accounting
-- [ ] Backup/restore runbook
+- [x] Operator initiated PostgreSQL backup/restore runbook
 - [ ] RPO/RTO defined and tested
 - [ ] Rollback tested
 - [ ] Manual approval gates verified
 - [ ] Production deployment evidence
 
-## Validation evidence for this change
+## Validation evidence — worker crash recovery (PR #8)
 
 - **PASS — Local tests:** 45 tests passed with Python 3.12 and disposable PostgreSQL 17.6. The worker crash/restart test killed a process after it claimed a job, then verified that a production-mode worker recovered the lease, blocked the unhandled job, and wrote both recovery and block audit events.
 - **PASS — Local code checks:** Ruff 0.13.1 format check, Ruff lint, and Python compilation.
 - **PASS — Local repository checks:** `make validate`, `make security`, `git diff --check`, and Compose configuration validation with synthetic placeholders.
 - **PASS with scope limit — Dependency audit:** `pip-audit` reported no known vulnerabilities; the local `sadwave-studio` distribution was skipped because it is not published on PyPI, while its installed dependencies were audited.
-- **PASS — Hosted PR checks:** application, container, dependency-review, CodeQL, and Analyze GitHub Actions passed for worker crash/restart test commit `8bae250`.
+- **PASS — Hosted checks:** application, container, dependency-review, CodeQL, and Analyze GitHub Actions passed for PR #8 head `2783174`; the merge commit was `b1429ad` and its main CI and CodeQL checks passed.
 - **PENDING — Production/external gates:** deployment and crash/restart evidence in the target runtime, backup/restore, rollback, provider-contract, full security, and end-to-end validation.
+
+## Validation evidence — PostgreSQL backup/restore (PR #6)
+
+- **PASS — Local tests:** 53 tests passed with Python 3.12 and disposable PostgreSQL 17.6 after syncing with current `main`.
+- **PASS — Local backup/restore drill:** PostgreSQL 17.6 `pg_dump` created a 12,037-byte custom archive with mode `0600`; restore into a new PostgreSQL 17.6 database reproduced counts for content jobs, queue rows, audit events, rate-limit buckets, and migration records, plus the queue sequence state. A separate password-authenticated restore passed using a temporary backup password file and a protected restore `PGPASSFILE`. The migration runner provisioned the restricted runtime role, its content-job read was verified, and `ANALYZE` completed.
+- **PASS — Local code checks:** Ruff 0.13.1 format and lint, plus Python compilation.
+- **PASS — Local repository checks:** `make validate`, `make security`, `git diff --check`, and Compose configuration validation with synthetic placeholders.
+- **PASS with scope limit — Dependency audit:** `pip-audit` reported no known vulnerabilities; the local `sadwave-studio` distribution was skipped because it is not published on PyPI.
+- **PASS — Container checks:** `docker build --pull -t sadwave-studio:review .` completed, and the built image's `scripts/backup.py --help` command ran.
+- **PASS — Hosted checks for prior PR #6 head:** application, container, dependency-review, CodeQL, and Analyze GitHub Actions passed for `f0ffe0b`; checks for the updated branch are pending.
+- **PENDING — Production/external gates:** automated backup scheduling and retention, encrypted off-host storage, defined RPO/RTO, production recovery exercise, rollback, provider-contract, full security, and end-to-end validation.
 
 A production claim requires evidence for every applicable gate. A code path or checklist item is not complete merely because it exists; it must be validated in the target runtime.

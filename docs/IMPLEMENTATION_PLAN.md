@@ -37,7 +37,7 @@
 - [ ] Queue cancellation
 - [ ] Transactional outbox where required
 - [x] Focused PostgreSQL integration tests for idempotency, rate limits, retry/dead-letter, and leases
-- [ ] Backup and restore verification
+- [x] On-demand PostgreSQL logical backup utility and disposable restore verification
 
 ## Stage 3 — YouTube integration — Not started
 
@@ -79,7 +79,8 @@
 - [ ] RBAC
 - [ ] Container vulnerability scanning with a trusted current scanner
 - [ ] Threat-model tests
-- [ ] Backup/restore
+- [x] On-demand logical backup and restore runbook/drill
+- [ ] Automated backup retention and disaster recovery objectives
 - [ ] Disaster recovery
 - [ ] Operational alerting
 

@@ -17,6 +17,7 @@ Local-first foundation for secure YouTube content operations, with production re
 - PostgreSQL persistence, versioned migrations, durable queue, lease fencing, and audit writes
 - Worker retries and recovers expired leases; queued jobs are explicitly blocked and dead-lettered until a real processor is registered
 - Worker stops cleanly on SIGINT/SIGTERM and can interrupt an idle poll
+- Operator initiated PostgreSQL logical backups with archive validation and a restore runbook; scheduling and off-host protection are not configured
 - Restricted PostgreSQL application role; schema migrations use the separate administrator role
 - Production Docker image and Compose API/worker/migration topology
 - Ruff formatting/linting
@@ -76,6 +77,7 @@ The system must never automate fake engagement, spam, credential abuse, CAPTCHA/
 - AI Master Production Prompt: docs/AI_MASTER_PRODUCTION_PROMPT.md
 - Security Model: docs/SECURITY_MODEL.md
 - Production Readiness: docs/PRODUCTION_READINESS.md
+- PostgreSQL backup and restore: docs/operations/postgresql-backup-restore.md
 - Agent Contract: AGENTS.md
 
 cvsz/ztemplate is reference-only and must not be modified by SadwaveStudio work.

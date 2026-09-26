@@ -35,6 +35,7 @@ All notable changes to SadwaveStudio should be documented here.
 - Compose credentials are required through environment injection rather than committed defaults.
 - Worker execution refuses unsupported workflow states instead of guessing behavior.
 - Worker handles SIGINT/SIGTERM and interrupts idle polling for prompt graceful shutdown.
+- Add an on-demand PostgreSQL custom-archive backup utility with credential-safe subprocess handling and a disposable restore runbook.
 
 ### Security
 

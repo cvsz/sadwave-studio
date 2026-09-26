@@ -110,6 +110,8 @@ Workers must support timeout, retry, dead-letter, cancellation, heartbeat, lease
 
 The current worker handles SIGINT and SIGTERM by stopping its polling loop. A shutdown request interrupts an idle poll; the worker finishes its current database operation before exiting, and lease recovery handles work abandoned by a process crash.
 
+Operators can create a single-database PostgreSQL logical archive with `scripts/backup.py`. The utility validates the archive and refuses to overwrite existing files. It does not schedule backups, manage retention, encrypt or copy archives off-host, or provide WAL-based point-in-time recovery.
+
 ## Cost controls
 
 Runtime configuration will support cost locks and explicit limits. Exceeding a configured limit pauses relevant work and emits an alert; it does not silently select a paid provider.
