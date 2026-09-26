@@ -103,4 +103,4 @@ jobs:
         with:
           image: sadwave-studio:ci
           artifact-name: sbom.spdx.json
-          output-format: spdx-json
+          format: spdx-json
