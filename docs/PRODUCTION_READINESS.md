@@ -120,6 +120,7 @@ The complete YouTube automation platform is **not yet production-ready** because
 - **PASS — Local code checks:** Ruff 0.13.1 format check, Ruff lint, and Python compilation.
 - **PASS — Local repository checks:** `make validate`, `make security`, `git diff --check`, and Compose configuration validation with synthetic placeholders.
 - **PASS with scope limit — Dependency audit:** `pip-audit` reported no known vulnerabilities; the local `sadwave-studio` distribution was skipped because it is not published on PyPI, while its installed dependencies were audited.
-- **PENDING — Hosted/external gates:** this change's GitHub CI/CodeQL and maintainer review; production deployment and crash/restart evidence, backup/restore, rollback, provider-contract, full security, and end-to-end validation.
+- **PASS — Hosted PR checks:** application, container, dependency-review, CodeQL, and Analyze GitHub Actions passed for worker crash/restart test commit `8bae250`.
+- **PENDING — Production/external gates:** deployment and crash/restart evidence in the target runtime, backup/restore, rollback, provider-contract, full security, and end-to-end validation.
 
 A production claim requires evidence for every applicable gate. A code path or checklist item is not complete merely because it exists; it must be validated in the target runtime.
