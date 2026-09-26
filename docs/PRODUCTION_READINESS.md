@@ -103,7 +103,7 @@ The complete YouTube automation platform is **not yet production-ready** because
 - [x] Worker crash lease-recovery mechanism
 - [x] Worker graceful SIGINT/SIGTERM shutdown and interruptible idle polling
 - [x] Bounded retry/dead-letter behavior
-- [ ] Structured production logs
+- [x] Structured JSON logs from the supported API and worker entrypoints
 - [ ] Metrics
 - [ ] Traces
 - [ ] Alerts
@@ -114,13 +114,22 @@ The complete YouTube automation platform is **not yet production-ready** because
 - [ ] Manual approval gates verified
 - [ ] Production deployment evidence
 
-## Validation evidence for this change
+## Validation evidence — worker crash recovery (PR #8)
 
 - **PASS — Local tests:** 45 tests passed with Python 3.12 and disposable PostgreSQL 17.6. The worker crash/restart test killed a process after it claimed a job, then verified that a production-mode worker recovered the lease, blocked the unhandled job, and wrote both recovery and block audit events.
-- **PASS — Local code checks:** Ruff 0.13.1 format check, Ruff lint, and Python compilation.
-- **PASS — Local repository checks:** `make validate`, `make security`, `git diff --check`, and Compose configuration validation with synthetic placeholders.
+- **PASS — Local code and repository checks:** Ruff 0.13.1 format and lint, Python compilation, `make validate`, `make security`, `git diff --check`, and Compose configuration validation with synthetic placeholders.
 - **PASS with scope limit — Dependency audit:** `pip-audit` reported no known vulnerabilities; the local `sadwave-studio` distribution was skipped because it is not published on PyPI, while its installed dependencies were audited.
-- **PASS — Hosted PR checks:** application, container, dependency-review, CodeQL, and Analyze GitHub Actions passed for worker crash/restart test commit `8bae250`.
+- **PASS — Hosted checks:** application, container, dependency-review, CodeQL, and Analyze GitHub Actions passed for PR #8 head `2783174`; the merge commit was `b1429ad` and its main CI and CodeQL checks passed.
 - **PENDING — Production/external gates:** deployment and crash/restart evidence in the target runtime, backup/restore, rollback, provider-contract, full security, and end-to-end validation.
+
+## Validation evidence — structured logging
+
+- **PASS — Local tests:** 49 tests passed with Python 3.12 and disposable PostgreSQL 17.6, including the worker recovery test updated to assert JSON event fields.
+- **PASS — Local code checks:** Ruff 0.13.1 format and lint, Python compilation, `make validate`, `make security`, and `git diff --check`.
+- **PASS — Dependency audit:** `pip-audit` found no known vulnerabilities; the local package was skipped because it is not published on PyPI.
+- **PASS — Container checks:** Compose configuration validated with synthetic placeholders, and `docker build --pull -t sadwave-studio:review .` completed.
+- **PASS — Container smoke check:** the supported API entrypoint emitted valid JSON request logs with route and method while omitting a query-token sentinel and caller-provided request ID.
+- **PENDING — Hosted PR checks and required review:** these must pass before merge because this change defines a production logging/privacy boundary.
+- **PENDING — Production/external gates:** deployment and runtime logging verification, metrics, traces, alerts, backup/restore, rollback, provider-contract, full security, and end-to-end validation.
 
 A production claim requires evidence for every applicable gate. A code path or checklist item is not complete merely because it exists; it must be validated in the target runtime.

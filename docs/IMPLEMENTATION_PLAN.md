@@ -76,6 +76,7 @@
 - [x] SBOM generation
 - [x] Production authentication baseline
 - [x] Database-backed API rate limiting
+- [x] Structured JSON API and worker logs with safe request metadata
 - [ ] RBAC
 - [ ] Container vulnerability scanning with a trusted current scanner
 - [ ] Threat-model tests
