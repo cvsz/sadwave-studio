@@ -8,6 +8,7 @@ import threading
 import psycopg
 
 from .config import Settings, get_settings
+from .logging_config import configure_logging
 from .repository import LeaseLostError, PostgresJobRepository
 
 logger = logging.getLogger("sadwave.worker")
@@ -31,7 +32,10 @@ def run_worker(
     while not stop_event.is_set():
         recovered = repository.recover_expired_leases(settings.worker_lease_seconds)
         if recovered:
-            logger.warning("recovered_expired_leases count=%s", recovered)
+            logger.warning(
+                "recovered_expired_leases",
+                extra={"event": "recovered_expired_leases", "count": recovered},
+            )
         if stop_event.is_set():
             break
 
@@ -48,7 +52,10 @@ def run_worker(
         try:
             repository.block_unhandled_job(queue_id, lease_token)
         except LeaseLostError:
-            logger.info("worker_lease_lost queue_id=%s job_id=%s", queue_id, job_id)
+            logger.info(
+                "worker_lease_lost",
+                extra={"event": "worker_lease_lost", "queue_id": queue_id, "job_id": job_id},
+            )
         except (KeyError, RuntimeError, ValueError, psycopg.Error) as exc:
             delay = min(3600, max(5, 2 ** min(attempts, 10))) + random.uniform(0, 3)
             try:
@@ -59,26 +66,40 @@ def run_worker(
                     int(delay),
                 )
             except LeaseLostError:
-                logger.info("worker_lease_lost queue_id=%s job_id=%s", queue_id, job_id)
+                logger.info(
+                    "worker_lease_lost",
+                    extra={
+                        "event": "worker_lease_lost",
+                        "queue_id": queue_id,
+                        "job_id": job_id,
+                    },
+                )
                 continue
             logger.error(
-                "worker_job_failed queue_id=%s job_id=%s error_type=%s",
-                queue_id,
-                job_id,
-                type(exc).__name__,
+                "worker_job_failed",
+                extra={
+                    "event": "worker_job_failed",
+                    "queue_id": queue_id,
+                    "job_id": job_id,
+                    "error_type": type(exc).__name__,
+                },
             )
         else:
             logger.warning(
-                "worker_job_blocked queue_id=%s job_id=%s reason=no_processor_registered",
-                queue_id,
-                job_id,
+                "worker_job_blocked",
+                extra={
+                    "event": "worker_job_blocked",
+                    "queue_id": queue_id,
+                    "job_id": job_id,
+                    "reason": "no_processor_registered",
+                },
             )
-    logger.info("worker_shutdown_complete")
+    logger.info("worker_shutdown_complete", extra={"event": "worker_shutdown_complete"})
 
 
 def main() -> None:
     settings = get_settings(require_api_token=False)
-    logging.basicConfig(level=settings.log_level)
+    configure_logging(settings.log_level)
     stop_event = threading.Event()
 
     def request_shutdown(_signum: int, _frame) -> None:

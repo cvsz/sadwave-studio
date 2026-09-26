@@ -1,6 +1,7 @@
 import logging
 import re
 import secrets
+import time
 from uuid import uuid4
 
 from fastapi import FastAPI, Header, HTTPException, Request, Response
@@ -136,6 +137,12 @@ def _safe_request_id(value: str | None) -> str:
     return str(uuid4())
 
 
+def _route_template(request: Request) -> str:
+    route = request.scope.get("route")
+    path = getattr(route, "path", None)
+    return path if isinstance(path, str) else "unmatched"
+
+
 def _secure_response(response: Response, request_id: str, path: str) -> Response:
     response.headers["X-Request-ID"] = request_id
     response.headers["X-Content-Type-Options"] = "nosniff"
@@ -174,33 +181,55 @@ def _error_response(
 @app.middleware("http")
 async def security_middleware(request: Request, call_next):
     request_id = _safe_request_id(request.headers.get("X-Request-ID"))
+    log_request_id = str(uuid4())
     request.state.request_id = request_id
-    if request.url.path.startswith("/api/") and not _authorized(request):
-        return _error_response(
-            request,
-            status_code=401,
-            code="UNAUTHORIZED",
-            message="unauthorized",
-        )
-
-    if settings.app_env in {"production", "staging"} and request.url.path.startswith("/api/"):
-        client_host = request.client.host if request.client else "unknown"
-        allowed = repository.allow_rate(
-            f"api:{client_host}", settings.api_rate_limit, settings.api_rate_window_seconds
-        )
-        if not allowed:
+    request.state.log_request_id = log_request_id
+    started_at = time.perf_counter()
+    status_code = None
+    try:
+        if request.url.path.startswith("/api/") and not _authorized(request):
             response = _error_response(
                 request,
-                status_code=429,
-                code="RATE_LIMITED",
-                message="rate limit exceeded",
+                status_code=401,
+                code="UNAUTHORIZED",
+                message="unauthorized",
             )
-            response.headers["Retry-After"] = str(settings.api_rate_window_seconds)
-            return response
-
-    response = await call_next(request)
-    _secure_response(response, request_id, request.url.path)
-    return response
+        elif settings.app_env in {"production", "staging"} and request.url.path.startswith("/api/"):
+            client_host = request.client.host if request.client else "unknown"
+            allowed = repository.allow_rate(
+                f"api:{client_host}", settings.api_rate_limit, settings.api_rate_window_seconds
+            )
+            if not allowed:
+                response = _error_response(
+                    request,
+                    status_code=429,
+                    code="RATE_LIMITED",
+                    message="rate limit exceeded",
+                )
+                response.headers["Retry-After"] = str(settings.api_rate_window_seconds)
+            else:
+                response = await call_next(request)
+                _secure_response(response, request_id, request.url.path)
+        else:
+            response = await call_next(request)
+            _secure_response(response, request_id, request.url.path)
+        status_code = response.status_code
+        return response
+    except Exception:
+        status_code = 500
+        raise
+    finally:
+        logger.info(
+            "http_request",
+            extra={
+                "event": "http_request",
+                "log_request_id": log_request_id,
+                "method": request.method,
+                "route": _route_template(request),
+                "status_code": status_code,
+                "duration_ms": round((time.perf_counter() - started_at) * 1000, 3),
+            },
+        )
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -238,10 +267,14 @@ async def request_validation_error_handler(request: Request, exc: RequestValidat
 @app.exception_handler(Exception)
 async def unexpected_error_handler(request: Request, exc: Exception):
     logger.error(
-        "request_failed request_id=%s path=%s error_type=%s",
-        getattr(request.state, "request_id", "unknown"),
-        request.url.path,
-        type(exc).__name__,
+        "request_failed",
+        extra={
+            "event": "request_failed",
+            "log_request_id": getattr(request.state, "log_request_id", "unknown"),
+            "route": _route_template(request),
+            "status_code": 500,
+            "error_type": type(exc).__name__,
+        },
     )
     return _error_response(
         request,

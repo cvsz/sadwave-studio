@@ -21,6 +21,7 @@ All notable changes to SadwaveStudio should be documented here.
 - Database-backed API rate limiting
 - Dedicated production worker service
 - Production API bearer authentication
+- Structured JSON API and worker logs with allowlisted operational fields
 - Docker and Compose runtime with dependency healthchecks
 - Unit/API test suite
 - Ruff formatting/linting and Python compile validation
@@ -35,6 +36,7 @@ All notable changes to SadwaveStudio should be documented here.
 - Compose credentials are required through environment injection rather than committed defaults.
 - Worker execution refuses unsupported workflow states instead of guessing behavior.
 - Worker handles SIGINT/SIGTERM and interrupts idle polling for prompt graceful shutdown.
+- API request logs use route templates and server-generated IDs; Uvicorn access logs that expose raw URLs are disabled.
 
 ### Security
 

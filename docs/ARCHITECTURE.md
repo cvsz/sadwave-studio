@@ -27,6 +27,8 @@ Worker ──┘
 
 Dashboard/CLI, provider adapters, and object storage are not implemented yet.
 
+The supported API and worker entrypoints emit structured JSON logs. API request events include a server-generated log ID, route template, status, method, and duration; they omit raw URLs, query strings, and caller-supplied request IDs. Uvicorn access logging is disabled.
+
 ## Proposed repository shape
 
 ```text
