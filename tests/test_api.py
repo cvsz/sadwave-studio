@@ -27,6 +27,19 @@ def test_create_job_rejects_oversized_idempotency_key():
     assert response.json()["error"]["message"] == "X-Idempotency-Key is too long"
 
 
+def test_create_job_rejects_oversized_request_body():
+    response = client.post(
+        "/api/v1/content/jobs",
+        json={"channel_id": "c1", "kind": "SHORT", "unused": "x" * 1_048_576},
+        headers={"X-Idempotency-Key": "large-body-key", "X-Request-ID": "large-body-request"},
+    )
+
+    assert response.status_code == 413
+    assert response.json()["error"]["code"] == "PAYLOAD_TOO_LARGE"
+    assert response.json()["error"]["requestId"] == "large-body-request"
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+
+
 def test_create_job_is_idempotent():
     payload = {"channel_id": "c1", "kind": "SHORT"}
     headers = {"X-Idempotency-Key": "test-idem-1"}

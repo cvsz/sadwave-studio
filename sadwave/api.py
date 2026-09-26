@@ -15,6 +15,7 @@ from .domain import JobState
 from .repository import PostgresJobRepository
 
 logger = logging.getLogger("sadwave.api")
+MAX_REQUEST_BODY_BYTES = 1_048_576
 settings = get_settings()
 repository = (
     PostgresJobRepository(settings.database_url, settings.worker_max_attempts)
@@ -23,7 +24,88 @@ repository = (
 )
 create_content_job = CreateContentJob(repository)
 
+
+class RequestBodyLimitMiddleware:
+    def __init__(self, app, *, max_body_bytes: int) -> None:
+        self.app = app
+        self.max_body_bytes = max_body_bytes
+
+    async def __call__(self, scope, receive, send) -> None:
+        if (
+            scope["type"] != "http"
+            or scope["method"] != "POST"
+            or scope["path"] != "/api/v1/content/jobs"
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        request = Request(scope, receive=receive)
+        request_id = _safe_request_id(request.headers.get("X-Request-ID"))
+        content_lengths = [
+            value for name, value in scope.get("headers", []) if name.lower() == b"content-length"
+        ]
+        if len(content_lengths) > 1:
+            await self._reject(request, request_id, receive, send, 400, "INVALID_CONTENT_LENGTH")
+            return
+        if content_lengths:
+            raw_length = content_lengths[0].decode("latin-1")
+            if not raw_length.isdigit():
+                await self._reject(
+                    request, request_id, receive, send, 400, "INVALID_CONTENT_LENGTH"
+                )
+                return
+            try:
+                content_length = int(raw_length)
+            except ValueError:
+                await self._reject(
+                    request, request_id, receive, send, 400, "INVALID_CONTENT_LENGTH"
+                )
+                return
+            if content_length > self.max_body_bytes:
+                await self._reject(request, request_id, receive, send, 413, "PAYLOAD_TOO_LARGE")
+                return
+
+        body_messages = []
+        body_size = 0
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                return
+            if message["type"] != "http.request":
+                body_messages.append(message)
+                break
+            body_size += len(message.get("body", b""))
+            if body_size > self.max_body_bytes:
+                await self._reject(request, request_id, receive, send, 413, "PAYLOAD_TOO_LARGE")
+                return
+            body_messages.append(message)
+            if not message.get("more_body", False):
+                break
+
+        async def replay_receive():
+            if body_messages:
+                return body_messages.pop(0)
+            return await receive()
+
+        await self.app(scope, replay_receive, send)
+
+    @staticmethod
+    async def _reject(request, request_id, receive, send, status_code: int, code: str) -> None:
+        request.state.request_id = request_id
+        message = (
+            "request body too large" if status_code == 413 else "invalid Content-Length header"
+        )
+        response = _error_response(
+            request,
+            status_code=status_code,
+            code=code,
+            message=message,
+        )
+        await response(request.scope, receive, send)
+
+
 app = FastAPI(title=settings.app_name, version="0.1.0")
+app.add_middleware(RequestBodyLimitMiddleware, max_body_bytes=MAX_REQUEST_BODY_BYTES)
 
 
 class CreateJobRequest(BaseModel):

@@ -20,7 +20,9 @@ class JobState(StrEnum):
 
 
 ALLOWED_TRANSITIONS: dict[JobState, frozenset[JobState]] = {
-    JobState.DRAFT: frozenset({JobState.PLANNED, JobState.CANCELLED}),
+    JobState.DRAFT: frozenset(
+        {JobState.PLANNED, JobState.FAILED, JobState.BLOCKED, JobState.CANCELLED}
+    ),
     JobState.PLANNED: frozenset({JobState.GENERATING, JobState.CANCELLED}),
     JobState.GENERATING: frozenset({JobState.GENERATED, JobState.FAILED, JobState.CANCELLED}),
     JobState.GENERATED: frozenset({JobState.VALIDATING, JobState.CANCELLED}),

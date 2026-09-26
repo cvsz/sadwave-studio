@@ -61,13 +61,30 @@ def _ensure_application_role(connection, role_name: str, password: str) -> None:
     admin_name = connection.execute("SELECT current_user").fetchone()[0]
     if role_name == admin_name:
         raise SystemExit("APP_DATABASE_USER must differ from the migration administrator")
-    exists = connection.execute(
-        "SELECT 1 FROM pg_roles WHERE rolname = %s",
-        (role_name,),
+    role_row = connection.execute(
+        "SELECT oid FROM pg_roles WHERE rolname = %s", (role_name,)
     ).fetchone()
+    if role_row is not None:
+        owns_database = connection.execute(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM pg_database
+                WHERE datname = current_database() AND datdba = %s
+            ) OR EXISTS (
+                SELECT 1 FROM pg_shdepend
+                WHERE refclassid = 'pg_authid'::regclass AND refobjid = %s AND deptype = 'o'
+            )
+            """,
+            (role_row[0], role_row[0]),
+        ).fetchone()[0]
+        if owns_database:
+            raise SystemExit(
+                "APP_DATABASE_USER must not own the database or PostgreSQL objects; "
+                "migrate ownership with the administrator first"
+            )
     role = sql.Identifier(role_name)
     secret = sql.Literal(password)
-    if exists:
+    if role_row is not None:
         statement = sql.SQL(
             "ALTER ROLE {} WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE "
             "NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD {}"

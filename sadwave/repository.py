@@ -126,9 +126,12 @@ class PostgresJobRepository:
                 """,
                 (worker_id, lease_token),
             ).fetchone()
-            return dict(row) if row else None
+            if row is None:
+                return None
+            return dict(row)
 
-    def complete_job(self, queue_id: int, lease_token: UUID | str) -> ContentJob:
+    def block_unhandled_job(self, queue_id: int, lease_token: UUID | str) -> ContentJob:
+        reason = "no processor is registered for this job kind"
         with self._connect() as connection:
             queue = connection.execute(
                 """
@@ -150,30 +153,37 @@ class PostgresJobRepository:
             if row is None:
                 raise KeyError("Queued job not found")
             job = self._to_domain(row)
-            updated = job.transition(JobState.PLANNED)
-            connection.execute(
-                "UPDATE content_jobs SET state = %s WHERE job_id = %s",
-                (updated.state.value, updated.job_id),
-            )
-            self._insert_audit(
-                connection,
-                actor_id=f"worker:{queue['locked_by']}",
-                action="JOB_PLANNED",
-                resource_type="content_job",
-                resource_id=updated.job_id,
-                details={"attempt": queue["attempts"], "queue_id": queue_id},
-            )
+            updated = job.transition(JobState.BLOCKED)
+            changed = connection.execute(
+                "UPDATE content_jobs SET state = %s WHERE job_id = %s AND state = %s",
+                (updated.state.value, updated.job_id, job.state.value),
+            ).rowcount
+            if changed != 1:
+                raise RuntimeError("job state changed before block was recorded")
             changed = connection.execute(
                 """
                 UPDATE job_queue
-                SET status = 'DONE', locked_at = NULL, locked_by = NULL,
-                    lease_token = NULL, updated_at = NOW()
+                SET status = 'DEAD', last_error = %s,
+                    locked_at = NULL, locked_by = NULL, lease_token = NULL, updated_at = NOW()
                 WHERE queue_id = %s AND status = 'RUNNING' AND lease_token = %s
                 """,
-                (queue_id, lease_token),
+                (reason, queue_id, lease_token),
             ).rowcount
             if changed != 1:
-                raise LeaseLostError("worker lease changed before completion")
+                raise LeaseLostError("worker lease changed before block was recorded")
+            self._insert_audit(
+                connection,
+                actor_id=f"worker:{queue['locked_by']}",
+                action="JOB_BLOCKED",
+                resource_type="content_job",
+                resource_id=updated.job_id,
+                details={
+                    "attempt": queue["attempts"],
+                    "queue_id": queue_id,
+                    "kind": row["kind"],
+                    "reason": reason,
+                },
+            )
             return updated
 
     def fail(
@@ -190,14 +200,33 @@ class PostgresJobRepository:
         with self._connect() as connection:
             row = connection.execute(
                 """
-                SELECT attempts, max_attempts FROM job_queue
+                SELECT job_id, attempts, max_attempts, locked_by FROM job_queue
                 WHERE queue_id = %s AND status = 'RUNNING' AND lease_token = %s FOR UPDATE
                 """,
                 (queue_id, lease_token),
             ).fetchone()
             if row is None:
                 raise LeaseLostError("worker lease is no longer current")
-            status = "DEAD" if row["attempts"] >= row["max_attempts"] else "READY"
+            terminal = row["attempts"] >= row["max_attempts"]
+            status = "DEAD" if terminal else "READY"
+            if terminal:
+                job_row = connection.execute(
+                    """
+                    SELECT job_id, channel_id, kind, state, idempotency_key, created_at
+                    FROM content_jobs WHERE job_id = %s FOR UPDATE
+                    """,
+                    (row["job_id"],),
+                ).fetchone()
+                if job_row is None:
+                    raise KeyError("Queued job not found")
+                job = self._to_domain(job_row)
+                failed = job.transition(JobState.FAILED)
+                changed = connection.execute(
+                    "UPDATE content_jobs SET state = %s WHERE job_id = %s AND state = %s",
+                    (failed.state.value, failed.job_id, job.state.value),
+                ).rowcount
+                if changed != 1:
+                    raise RuntimeError("job state changed before failure was recorded")
             updated = connection.execute(
                 """
                 UPDATE job_queue
@@ -210,21 +239,83 @@ class PostgresJobRepository:
             ).rowcount
             if updated != 1:
                 raise LeaseLostError("worker lease changed before failure was recorded")
+            self._insert_audit(
+                connection,
+                actor_id=f"worker:{row['locked_by']}",
+                action="JOB_FAILED" if terminal else "JOB_RETRY_SCHEDULED",
+                resource_type="content_job",
+                resource_id=str(row["job_id"]),
+                details={
+                    "attempt": row["attempts"],
+                    "max_attempts": row["max_attempts"],
+                    "queue_id": queue_id,
+                    "retry_delay_seconds": None if terminal else retry_delay_seconds,
+                },
+            )
 
     def recover_expired_leases(self, lease_seconds: int = 300) -> int:
+        if lease_seconds < 30 or lease_seconds > 3600:
+            raise ValueError("lease_seconds must be between 30 and 3600")
         with self._connect() as connection:
-            result = connection.execute(
+            expired = connection.execute(
                 """
-                UPDATE job_queue
-                SET status = CASE WHEN attempts >= max_attempts THEN 'DEAD' ELSE 'READY' END,
-                    available_at = NOW(), locked_at = NULL, locked_by = NULL,
-                    lease_token = NULL,
-                    last_error = COALESCE(last_error, 'worker lease expired'), updated_at = NOW()
+                SELECT queue_id, job_id, attempts, max_attempts, locked_by
+                FROM job_queue
                 WHERE status = 'RUNNING' AND locked_at < NOW() - (%s * INTERVAL '1 second')
+                ORDER BY queue_id
+                FOR UPDATE SKIP LOCKED
                 """,
                 (lease_seconds,),
-            )
-            return result.rowcount
+            ).fetchall()
+            for queue in expired:
+                terminal = queue["attempts"] >= queue["max_attempts"]
+                status = "DEAD" if terminal else "READY"
+                changed = connection.execute(
+                    """
+                    UPDATE job_queue
+                    SET status = %s, available_at = NOW(), locked_at = NULL, locked_by = NULL,
+                        lease_token = NULL, last_error = 'worker lease expired', updated_at = NOW()
+                    WHERE queue_id = %s AND status = 'RUNNING'
+                    """,
+                    (status, queue["queue_id"]),
+                ).rowcount
+                if changed != 1:
+                    raise LeaseLostError("worker lease changed during recovery")
+                action = "JOB_LEASE_RECOVERED"
+                if terminal:
+                    job_row = connection.execute(
+                        """
+                        SELECT job_id, channel_id, kind, state, idempotency_key, created_at
+                        FROM content_jobs WHERE job_id = %s FOR UPDATE
+                        """,
+                        (queue["job_id"],),
+                    ).fetchone()
+                    if job_row is None:
+                        raise KeyError("Queued job not found")
+                    job = self._to_domain(job_row)
+                    failed = job.transition(JobState.FAILED)
+                    changed = connection.execute(
+                        "UPDATE content_jobs SET state = %s WHERE job_id = %s AND state = %s",
+                        (failed.state.value, failed.job_id, job.state.value),
+                    ).rowcount
+                    if changed != 1:
+                        raise RuntimeError("job state changed before recovery failure was recorded")
+                    action = "JOB_FAILED"
+                self._insert_audit(
+                    connection,
+                    actor_id=f"worker:{queue['locked_by'] or 'lease-recovery'}",
+                    action=action,
+                    resource_type="content_job",
+                    resource_id=str(queue["job_id"]),
+                    details={
+                        "attempt": queue["attempts"],
+                        "max_attempts": queue["max_attempts"],
+                        "queue_id": queue["queue_id"],
+                        "reason": "worker lease expired",
+                        "status": status,
+                    },
+                )
+            return len(expired)
 
     def allow_rate(self, bucket_key: str, limit: int, window_seconds: int = 60) -> bool:
         if not bucket_key.strip() or limit < 1 or window_seconds < 1:

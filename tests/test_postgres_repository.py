@@ -190,12 +190,55 @@ def test_application_role_is_restricted_and_can_run_runtime_queries():
     assert created and stored.job_id == job.job_id
     item = app_repository.claim_next(f"worker-app-role-{uuid4()}")
     assert item is not None and str(item["job_id"]) == job.job_id
-    completed = app_repository.complete_job(item["queue_id"], item["lease_token"])
-    assert completed.state is JobState.PLANNED
+    blocked = app_repository.block_unhandled_job(item["queue_id"], item["lease_token"])
+    assert blocked.state is JobState.BLOCKED
     assert app_repository.allow_rate(f"integration:{uuid4()}", 1)
 
 
-def test_expired_lease_fences_stale_worker_and_completes_atomically(repository):
+def test_migration_refuses_existing_application_role_that_owns_objects():
+    role_name = f"sadwave_owner_{uuid4().hex[:12]}"
+    table_name = f"sadwave_owner_test_{uuid4().hex[:12]}"
+    password = secrets.token_urlsafe(32)
+    with psycopg.connect(TEST_DATABASE_URL) as connection:
+        connection.execute(
+            sql.SQL("CREATE ROLE {} LOGIN PASSWORD {}").format(
+                sql.Identifier(role_name), sql.Literal(password)
+            )
+        )
+        connection.execute(
+            sql.SQL("GRANT CREATE ON SCHEMA public TO {}").format(sql.Identifier(role_name))
+        )
+        connection.execute(
+            sql.SQL("CREATE TABLE public.{} (id INTEGER)").format(sql.Identifier(table_name))
+        )
+        connection.execute(
+            sql.SQL("ALTER TABLE public.{} OWNER TO {}").format(
+                sql.Identifier(table_name), sql.Identifier(role_name)
+            )
+        )
+
+    try:
+        result = subprocess.run(
+            [sys.executable, "scripts/migrate.py"],
+            cwd=PROJECT_DIR,
+            env=_migration_environment()
+            | {"APP_DATABASE_USER": role_name, "APP_DATABASE_PASSWORD": password},
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode != 0
+        assert "must not own the database or PostgreSQL objects" in result.stderr
+    finally:
+        with psycopg.connect(TEST_DATABASE_URL) as connection:
+            connection.execute(
+                sql.SQL("DROP TABLE IF EXISTS public.{}").format(sql.Identifier(table_name))
+            )
+            connection.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role_name)))
+            connection.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(role_name)))
+
+
+def test_expired_lease_fences_stale_worker_and_blocks_atomically(repository):
     idempotency_key = f"lease-integration-{uuid4()}"
     job = ContentJob.create(str(uuid4()), "channel-integration", "SHORT", idempotency_key)
     stored, created = repository.create_if_absent(job)
@@ -215,12 +258,12 @@ def test_expired_lease_fences_stale_worker_and_completes_atomically(repository):
     assert second is not None and second["queue_id"] == first["queue_id"]
     assert second["lease_token"] != old_token
     with pytest.raises(LeaseLostError):
-        repository.complete_job(int(first["queue_id"]), old_token)
-    with pytest.raises(LeaseLostError):
         repository.fail(int(first["queue_id"]), old_token, "late failure")
+    with pytest.raises(LeaseLostError):
+        repository.block_unhandled_job(int(first["queue_id"]), old_token)
 
-    completed = repository.complete_job(int(second["queue_id"]), second["lease_token"])
-    assert completed.state is JobState.PLANNED
+    blocked = repository.block_unhandled_job(int(second["queue_id"]), second["lease_token"])
+    assert blocked.state is JobState.BLOCKED
     with psycopg.connect(TEST_DATABASE_URL) as connection:
         state = connection.execute(
             "SELECT state FROM content_jobs WHERE job_id = %s",
@@ -231,9 +274,89 @@ def test_expired_lease_fences_stale_worker_and_completes_atomically(repository):
             (second["queue_id"],),
         ).fetchone()
         events = connection.execute(
-            "SELECT COUNT(*) FROM audit_events WHERE resource_id = %s",
+            "SELECT action FROM audit_events WHERE resource_id = %s ORDER BY created_at, action",
             (str(stored.job_id),),
+        ).fetchall()
+    assert state == JobState.BLOCKED.value
+    assert queue_status == ("DEAD", None)
+    assert [event[0] for event in events] == ["JOB_LEASE_RECOVERED", "JOB_BLOCKED"]
+
+
+def test_retry_exhaustion_fails_job_and_audits_each_attempt(repository):
+    bounded_repository = PostgresJobRepository(TEST_DATABASE_URL, max_attempts=2)
+    job = ContentJob.create(
+        str(uuid4()), "channel-integration", "SHORT", f"lease-integration-retry-{uuid4()}"
+    )
+    stored, created = bounded_repository.create_if_absent(job)
+    assert created
+
+    first = bounded_repository.claim_next(f"worker-retry-{uuid4()}")
+    assert first is not None
+    bounded_repository.fail(int(first["queue_id"]), first["lease_token"], "safe failure", 1)
+    with psycopg.connect(TEST_DATABASE_URL) as connection:
+        connection.execute(
+            "UPDATE job_queue SET available_at = NOW() WHERE queue_id = %s",
+            (first["queue_id"],),
+        )
+        state = connection.execute(
+            "SELECT state FROM content_jobs WHERE job_id = %s", (stored.job_id,)
         ).fetchone()[0]
-    assert state == JobState.PLANNED.value
-    assert queue_status == ("DONE", None)
-    assert events == 1
+    assert state == JobState.DRAFT.value
+
+    second = bounded_repository.claim_next(f"worker-retry-{uuid4()}")
+    assert second is not None and second["attempts"] == 2
+    bounded_repository.fail(int(second["queue_id"]), second["lease_token"], "safe failure", 1)
+    with psycopg.connect(TEST_DATABASE_URL) as connection:
+        state = connection.execute(
+            "SELECT state FROM content_jobs WHERE job_id = %s", (stored.job_id,)
+        ).fetchone()[0]
+        queue = connection.execute(
+            "SELECT status, lease_token FROM job_queue WHERE queue_id = %s",
+            (second["queue_id"],),
+        ).fetchone()
+        actions = connection.execute(
+            "SELECT action FROM audit_events WHERE resource_id = %s ORDER BY created_at, action",
+            (stored.job_id,),
+        ).fetchall()
+    assert state == JobState.FAILED.value
+    assert queue == ("DEAD", None)
+    assert [action[0] for action in actions] == ["JOB_RETRY_SCHEDULED", "JOB_FAILED"]
+
+
+def test_expired_last_lease_fails_job_and_audits_dead_letter(repository):
+    bounded_repository = PostgresJobRepository(TEST_DATABASE_URL, max_attempts=1)
+    job = ContentJob.create(
+        str(uuid4()), "channel-integration", "SHORT", f"lease-integration-expired-{uuid4()}"
+    )
+    stored, created = bounded_repository.create_if_absent(job)
+    assert created
+    claimed = bounded_repository.claim_next(f"worker-expired-{uuid4()}")
+    assert claimed is not None
+    with psycopg.connect(TEST_DATABASE_URL) as connection:
+        connection.execute(
+            "UPDATE job_queue SET locked_at = NOW() - INTERVAL '1 hour' WHERE queue_id = %s",
+            (claimed["queue_id"],),
+        )
+
+    assert bounded_repository.recover_expired_leases(30) == 1
+    with psycopg.connect(TEST_DATABASE_URL) as connection:
+        state = connection.execute(
+            "SELECT state FROM content_jobs WHERE job_id = %s", (stored.job_id,)
+        ).fetchone()[0]
+        queue = connection.execute(
+            "SELECT status, lease_token FROM job_queue WHERE queue_id = %s",
+            (claimed["queue_id"],),
+        ).fetchone()
+        action = connection.execute(
+            "SELECT action FROM audit_events WHERE resource_id = %s",
+            (stored.job_id,),
+        ).fetchone()[0]
+    assert state == JobState.FAILED.value
+    assert queue == ("DEAD", None)
+    assert action == "JOB_FAILED"
+
+
+@pytest.mark.parametrize("lease_seconds", [0, 29, 3601])
+def test_recovery_rejects_invalid_lease_timeout(repository, lease_seconds):
+    with pytest.raises(ValueError, match="lease_seconds must be between 30 and 3600"):
+        repository.recover_expired_leases(lease_seconds)

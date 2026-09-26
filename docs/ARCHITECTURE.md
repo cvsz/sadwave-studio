@@ -2,7 +2,7 @@
 
 ## Status
 
-The current runtime implements a FastAPI API, PostgreSQL job and queue storage, a dedicated worker, versioned migrations, and audit events. YouTube, AI, media, object storage, dashboard, and publishing adapters remain planned capabilities.
+The current runtime implements a FastAPI API, PostgreSQL job and queue storage, a dedicated worker, versioned migrations, and audit events. The worker has no content processors: it marks unhandled work `BLOCKED`, dead-letters the queue item, and records an audit event. It does not report work as planned or processed. YouTube, AI, media, object storage, dashboard, and publishing adapters remain planned capabilities.
 
 ## Architectural principles
 

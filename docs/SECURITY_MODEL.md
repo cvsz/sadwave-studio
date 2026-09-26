@@ -33,6 +33,8 @@ Uploaded media is untrusted and must be processed in an isolated worker with res
 
 Secrets must be injected through runtime secret management. Never store OAuth access/refresh tokens, API keys, cookies, passwords, authorization headers, or private keys in source control or logs.
 
+The PostgreSQL runtime role must not own the application database or objects. The migration runner fails closed when an existing runtime role still owns database objects; ownership must be corrected by the database administrator before migrations continue.
+
 ## Publishing
 
 Publishing is a privileged mutation. The application must authenticate the actor, authorize the operation, enforce policy, register an idempotency key, execute the provider call, verify the remote result, and write an immutable audit event.
@@ -40,6 +42,8 @@ Publishing is a privileged mutation. The application must authenticate the actor
 ## Cost security
 
 Paid providers require explicit configuration. Budget limits are enforcement controls, not advisory metrics. Reaching a limit must pause affected work and notify operators.
+
+At the current implementation baseline, no paid-provider calls or content processors exist. The cost and dry-run settings are configuration only; they are not yet enforced by an execution workflow and must not be presented as active budget protection.
 
 ## Audit
 

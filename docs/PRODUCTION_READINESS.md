@@ -6,7 +6,7 @@ This file is the authoritative checklist for declaring SadwaveStudio production-
 
 **NOT PRODUCTION-READY. Runtime hardening is implemented; release evidence and major platform capabilities remain outstanding.**
 
-The repository implements a durable PostgreSQL-backed queue, lease fencing and recovery, bounded retries, transactional audit writes, atomic idempotency, database-backed API rate limiting, common request/error handling, versioned migrations, production Compose topology, and pinned CI actions. These capabilities still require hosted CI and operational evidence before release claims.
+The repository implements a durable PostgreSQL-backed queue, lease fencing and recovery, bounded retries, transactional audit writes, atomic idempotency, database-backed API rate limiting, common request/error handling, versioned migrations, production Compose topology, and pinned CI actions. The worker has no content processors; queued work is explicitly blocked and dead-lettered with an audit event. These capabilities still require hosted CI and operational evidence before release claims.
 
 The complete YouTube automation platform is **not yet production-ready** because YouTube OAuth/synchronization, provider contracts, media isolation, AI execution, dashboard/RBAC, backup/restore evidence, and full integration/E2E/recovery evidence are still outstanding.
 
@@ -21,8 +21,10 @@ The complete YouTube automation platform is **not yet production-ready** because
 - [x] Idempotency enforcement
 - [x] PostgreSQL persistence adapter
 - [x] Restricted PostgreSQL runtime role with administrator-only migrations
+- [x] Migration runner rejects an existing runtime role that owns database objects
 - [x] Durable queue persistence
 - [x] Worker claim/lease model
+- [x] Unhandled jobs transition to BLOCKED and are dead-lettered with an audit event
 - [x] Expired-worker lease recovery
 - [x] Retry with bounded attempts
 - [x] Dead-letter state
@@ -61,6 +63,7 @@ The complete YouTube automation platform is **not yet production-ready** because
 ### Security
 
 - [x] Production API authentication
+- [x] Bounded content-job API request bodies
 - [x] Secret configuration gate
 - [x] Dependency audit
 - [x] SBOM generation
@@ -86,14 +89,13 @@ The complete YouTube automation platform is **not yet production-ready** because
 - [x] Idempotency test coverage
 - [x] Dependency audit gate
 - [x] Focused PostgreSQL integration tests for idempotency, rate limits, and lease fencing
-- [ ] Retry/dead-letter behavior tests against PostgreSQL
-- [ ] Worker crash/restart recovery test
+- [x] Retry/dead-letter and terminal expired-lease behavior tests against PostgreSQL
+- [ ] Worker process crash/restart recovery test
 - [ ] Provider contract tests
 - [ ] Media tests
 - [ ] Security tests
 - [ ] E2E tests
-- [ ] Retry/dead-letter tests against real PostgreSQL
-- [ ] Crash/restart recovery tests
+- [x] Retry/dead-letter tests against disposable PostgreSQL
 - [ ] Backup/restore test
 
 ### Operations
@@ -113,8 +115,10 @@ The complete YouTube automation platform is **not yet production-ready** because
 
 ## Validation evidence for this change
 
-- Local disposable PostgreSQL 17.6 with Python 3.12: 19 tests passed, including runtime-role privilege checks, concurrent idempotency/rate-limit checks, stale-lease fencing, and migration reapplication.
-- Ruff format/lint, Python compile, Docker image build, and Compose configuration passed locally.
-- GitHub CI for the pushed PR remains the hosted gate; production deployment, backup/restore, rollback, provider-contract, full security-test, and end-to-end evidence remain outstanding.
+- **PASS — Local tests:** 42 tests passed with Python 3.12 and disposable PostgreSQL 17.6, including role-ownership rejection, finite configuration bounds, request-body limits, retry/dead-letter, terminal lease recovery, stale-lease fencing, idempotency, and rate limits.
+- **PASS — Local code checks:** Ruff format check, Ruff lint, and Python compilation.
+- **PASS — Local repository/runtime checks:** `make validate`, secret-filename check, Compose configuration, GitHub YAML parsing, and Docker image build.
+- **PASS with scope limit — Dependency audit:** `pip-audit` reported no known vulnerabilities; the local `sadwave-studio` distribution was skipped because it is not published on PyPI, while its installed dependencies were audited.
+- **PENDING — Hosted/external gates:** GitHub CI/CodeQL, production deployment, backup/restore, rollback, provider-contract, full security, end-to-end, and full worker crash/restart evidence.
 
 A production claim requires evidence for every applicable gate. A code path or checklist item is not complete merely because it exists; it must be validated in the target runtime.

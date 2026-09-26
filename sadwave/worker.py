@@ -36,7 +36,9 @@ def run_worker() -> None:
         lease_token = item["lease_token"]
 
         try:
-            repository.complete_job(queue_id, lease_token)
+            repository.block_unhandled_job(queue_id, lease_token)
+        except LeaseLostError:
+            logger.info("worker_lease_lost queue_id=%s job_id=%s", queue_id, job_id)
         except (KeyError, RuntimeError, ValueError, psycopg.Error) as exc:
             delay = min(3600, max(5, 2 ** min(attempts, 10))) + random.uniform(0, 3)
             try:
@@ -54,6 +56,12 @@ def run_worker() -> None:
                 queue_id,
                 job_id,
                 type(exc).__name__,
+            )
+        else:
+            logger.warning(
+                "worker_job_blocked queue_id=%s job_id=%s reason=no_processor_registered",
+                queue_id,
+                job_id,
             )
 
 
