@@ -32,6 +32,7 @@
 - [x] Durable queue and worker lease model
 - [x] Bounded retry and dead-letter handling
 - [x] Expired lease recovery with stale-worker fencing
+- [x] Graceful SIGINT/SIGTERM shutdown during worker polling
 - [ ] Content processors and job execution
 - [ ] Queue cancellation
 - [ ] Transactional outbox where required

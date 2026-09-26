@@ -2,32 +2,42 @@ from __future__ import annotations
 
 import logging
 import random
-import time
+import signal
+import threading
 
 import psycopg
 
-from .config import get_settings
+from .config import Settings, get_settings
 from .repository import LeaseLostError, PostgresJobRepository
 
 logger = logging.getLogger("sadwave.worker")
 
 
-def run_worker() -> None:
-    settings = get_settings(require_api_token=False)
+def run_worker(
+    *,
+    stop_event: threading.Event | None = None,
+    settings: Settings | None = None,
+) -> None:
+    if settings is None:
+        settings = get_settings(require_api_token=False)
     if settings.app_env not in {"production", "staging"}:
         raise RuntimeError("Worker requires APP_ENV=staging or APP_ENV=production")
 
+    if stop_event is None:
+        stop_event = threading.Event()
     repository = PostgresJobRepository(settings.database_url, settings.worker_max_attempts)
     worker_id = settings.worker_id
 
-    while True:
+    while not stop_event.is_set():
         recovered = repository.recover_expired_leases(settings.worker_lease_seconds)
         if recovered:
             logger.warning("recovered_expired_leases count=%s", recovered)
+        if stop_event.is_set():
+            break
 
         item = repository.claim_next(worker_id, settings.worker_lease_seconds)
         if item is None:
-            time.sleep(settings.worker_poll_seconds)
+            stop_event.wait(settings.worker_poll_seconds)
             continue
 
         queue_id = int(item["queue_id"])
@@ -63,8 +73,21 @@ def run_worker() -> None:
                 queue_id,
                 job_id,
             )
+    logger.info("worker_shutdown_complete")
+
+
+def main() -> None:
+    settings = get_settings(require_api_token=False)
+    logging.basicConfig(level=settings.log_level)
+    stop_event = threading.Event()
+
+    def request_shutdown(_signum: int, _frame) -> None:
+        stop_event.set()
+
+    signal.signal(signal.SIGINT, request_shutdown)
+    signal.signal(signal.SIGTERM, request_shutdown)
+    run_worker(stop_event=stop_event, settings=settings)
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=get_settings(require_api_token=False).log_level)
-    run_worker()
+    main()

@@ -108,6 +108,8 @@ External failures are classified as:
 
 Workers must support timeout, retry, dead-letter, cancellation, heartbeat, lease/recovery, and duplicate-request protection.
 
+The current worker handles SIGINT and SIGTERM by stopping its polling loop. A shutdown request interrupts an idle poll; the worker finishes its current database operation before exiting, and lease recovery handles work abandoned by a process crash.
+
 ## Cost controls
 
 Runtime configuration will support cost locks and explicit limits. Exceeding a configured limit pauses relevant work and emits an alert; it does not silently select a paid provider.

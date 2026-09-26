@@ -101,6 +101,7 @@ The complete YouTube automation platform is **not yet production-ready** because
 ### Operations
 
 - [x] Worker crash lease-recovery mechanism
+- [x] Worker graceful SIGINT/SIGTERM shutdown and interruptible idle polling
 - [x] Bounded retry/dead-letter behavior
 - [ ] Structured production logs
 - [ ] Metrics
