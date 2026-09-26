@@ -16,6 +16,7 @@ Local-first foundation for secure YouTube content operations, with production re
 - Idempotent job creation with request-conflict protection
 - PostgreSQL persistence, versioned migrations, durable queue, lease fencing, and audit writes
 - Worker retries and recovers expired leases; queued jobs are explicitly blocked and dead-lettered until a real processor is registered
+- Worker stops cleanly on SIGINT/SIGTERM and can interrupt an idle poll
 - Restricted PostgreSQL application role; schema migrations use the separate administrator role
 - Production Docker image and Compose API/worker/migration topology
 - Ruff formatting/linting

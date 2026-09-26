@@ -34,6 +34,7 @@ All notable changes to SadwaveStudio should be documented here.
 - Production readiness documentation now distinguishes the production-core gate from the incomplete full platform.
 - Compose credentials are required through environment injection rather than committed defaults.
 - Worker execution refuses unsupported workflow states instead of guessing behavior.
+- Worker handles SIGINT/SIGTERM and interrupts idle polling for prompt graceful shutdown.
 
 ### Security
 
