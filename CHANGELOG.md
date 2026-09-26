@@ -10,8 +10,11 @@ All notable changes to SadwaveStudio should be documented here.
 - PostgreSQL content-job repository and migrations
 - Content-job lifecycle state machine
 - Durable PostgreSQL job queue with leases and recovery
-- Lease-token fencing and transactional worker state/audit/queue completion
+- Lease-token fencing and transactional worker state/audit/queue updates
 - Bounded retry and dead-letter handling
+- Terminal retry and lease-recovery outcomes update content-job state and audit in the same transaction
+- Unhandled jobs are blocked and dead-lettered instead of being marked planned without processing
+- Content-job API requests are limited to 1 MiB
 - Immutable application audit-event persistence
 - Atomic idempotent job creation and audit persistence
 - Versioned startup migrations with restricted runtime database role
@@ -36,6 +39,8 @@ All notable changes to SadwaveStudio should be documented here.
 
 - Removed the compromised Trivy GitHub Action from CI after Dependency Review identified advisory GHSA-69fq-xp46-6x23.
 - Production/staging startup now fails closed without an API token.
+- Production/staging API tokens must be at least 32 non-whitespace characters; cost budgets reject NaN and infinity values.
+- Migrations reject an existing runtime database role that still owns database objects.
 - Production API mutations require bearer authentication and idempotency keys.
 - Production API traffic receives security response headers and database-backed rate limiting.
 - API and worker database access no longer uses the PostgreSQL administrator role.

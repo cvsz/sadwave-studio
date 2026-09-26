@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     dry_run: bool = True
     autonomy_level: int = Field(default=0, ge=0, le=5)
     cost_lock: bool = True
-    max_daily_api_cost: float = Field(default=0.0, ge=0)
-    max_monthly_api_cost: float = Field(default=0.0, ge=0)
+    max_daily_api_cost: float = Field(default=0.0, ge=0, allow_inf_nan=False)
+    max_monthly_api_cost: float = Field(default=0.0, ge=0, allow_inf_nan=False)
     max_ai_tokens: int = Field(default=0, ge=0)
     max_render_time_seconds: int = Field(default=0, ge=0)
     ai_provider_mode: Literal["local", "explicit"] = "local"
@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     api_rate_window_seconds: int = Field(default=60, ge=1, le=3600)
     worker_id: str = Field(default="sadwave-worker", min_length=1, max_length=128)
     worker_lease_seconds: int = Field(default=300, ge=30, le=3600)
-    worker_poll_seconds: float = Field(default=2.0, gt=0, le=60)
+    worker_poll_seconds: float = Field(default=2.0, gt=0, le=60, allow_inf_nan=False)
     worker_max_attempts: int = Field(default=5, ge=1, le=20)
 
     model_config = SettingsConfigDict(
@@ -38,8 +38,15 @@ class Settings(BaseSettings):
     )
 
     def validate_startup(self, *, require_api_token: bool = True) -> None:
-        if require_api_token and self.app_env in {"production", "staging"} and not self.api_token:
-            raise ValueError("API_TOKEN is required in production/staging")
+        if require_api_token and self.app_env in {"production", "staging"}:
+            if not self.api_token:
+                raise ValueError("API_TOKEN is required in production/staging")
+            if (
+                len(self.api_token) < 32
+                or self.api_token.strip() != self.api_token
+                or any(character.isspace() for character in self.api_token)
+            ):
+                raise ValueError("API_TOKEN must be at least 32 non-whitespace characters")
         if self.app_env in {"production", "staging"} and not self.database_url.strip():
             raise ValueError("DATABASE_URL is required in production/staging")
         if self.app_env == "production" and self.autonomy_level > 4:

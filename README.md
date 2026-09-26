@@ -1,8 +1,8 @@
 # SadwaveStudio
 
-Production-grade, secure, observable, cost-controlled automation for YouTube content operations.
+Local-first foundation for secure YouTube content operations, with production readiness still gated.
 
-> **Current status: API, PostgreSQL job queue, and worker foundation implemented; the full production platform remains gated.**
+> **Current status: API, PostgreSQL job queue, and worker foundation implemented; content processors and the full production platform remain gated.**
 
 ## Implemented now
 
@@ -11,16 +11,18 @@ Production-grade, secure, observable, cost-controlled automation for YouTube con
 - Request correlation IDs
 - /health, /ready, /version
 - Bearer authentication for staging/production API mutations
+- 1 MiB request-body limit on content-job creation
 - Content-job lifecycle state machine
 - Idempotent job creation with request-conflict protection
 - PostgreSQL persistence, versioned migrations, durable queue, lease fencing, and audit writes
+- Worker retries and recovers expired leases; queued jobs are explicitly blocked and dead-lettered until a real processor is registered
 - Restricted PostgreSQL application role; schema migrations use the separate administrator role
 - Production Docker image and Compose API/worker/migration topology
 - Ruff formatting/linting
 - Unit/API tests
 - Dependency vulnerability audit
 - SBOM generation
-- Cost-lock, dry-run, and autonomy controls
+- Cost, dry-run, and autonomy configuration fields (workflow enforcement is pending until processors exist)
 
 ## Quick start
 
@@ -44,6 +46,8 @@ docker compose up --build
 Compose waits for PostgreSQL, applies pending versioned migrations, and then starts the API and worker.
 The migration service uses the PostgreSQL administrator account to provision schema and a restricted
 `sadwave_app` role. The API and worker receive only that role's password, separately from `DATABASE_URL`.
+The worker currently has no content processors. It records queued work as `BLOCKED` with a dead-letter
+queue status and audit event; it does not claim to plan, generate, or publish content.
 
 The production API requires:
 

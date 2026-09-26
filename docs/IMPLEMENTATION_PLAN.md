@@ -28,11 +28,14 @@
 - [x] Core content-job persistence
 - [x] Lifecycle states
 - [x] Idempotency key uniqueness
-- [ ] Durable audit events
-- [ ] Queue/job execution model
-- [ ] Retry/dead-letter/cancellation/lease recovery
+- [x] Durable audit events for creation, retry, failure, block, and lease recovery
+- [x] Durable queue and worker lease model
+- [x] Bounded retry and dead-letter handling
+- [x] Expired lease recovery with stale-worker fencing
+- [ ] Content processors and job execution
+- [ ] Queue cancellation
 - [ ] Transactional outbox where required
-- [ ] PostgreSQL integration tests
+- [x] Focused PostgreSQL integration tests for idempotency, rate limits, retry/dead-letter, and leases
 - [ ] Backup and restore verification
 
 ## Stage 3 — YouTube integration — Not started
@@ -71,8 +74,8 @@
 - [x] Secret and dependency gates
 - [x] SBOM generation
 - [x] Production authentication baseline
+- [x] Database-backed API rate limiting
 - [ ] RBAC
-- [ ] Rate limiting
 - [ ] Container vulnerability scanning with a trusted current scanner
 - [ ] Threat-model tests
 - [ ] Backup/restore
