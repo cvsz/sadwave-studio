@@ -35,6 +35,7 @@ All notable changes to SadwaveStudio should be documented here.
 - Compose credentials are required through environment injection rather than committed defaults.
 - Worker execution refuses unsupported workflow states instead of guessing behavior.
 - Worker handles SIGINT/SIGTERM and interrupts idle polling for prompt graceful shutdown.
+- Docker builds now allowlist runtime source files so local secrets, test data, and repository metadata stay out of the build context.
 
 ### Security
 

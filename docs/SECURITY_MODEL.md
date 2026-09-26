@@ -35,6 +35,8 @@ Secrets must be injected through runtime secret management. Never store OAuth ac
 
 The PostgreSQL runtime role must not own the application database or objects. The migration runner fails closed when an existing runtime role still owns database objects; ownership must be corrected by the database administrator before migrations continue.
 
+Docker builds use a context allowlist containing only the Dockerfile, package metadata, runtime package, migrations, and scripts. Local environment files, tests, backups, generated data, and Git metadata must not be sent to the builder.
+
 ## Publishing
 
 Publishing is a privileged mutation. The application must authenticate the actor, authorize the operation, enforce policy, register an idempotency key, execute the provider call, verify the remote result, and write an immutable audit event.
