@@ -91,7 +91,7 @@ The complete YouTube automation platform is **not yet production-ready** because
 - [x] Dependency audit gate
 - [x] Focused PostgreSQL integration tests for idempotency, rate limits, and lease fencing
 - [x] Retry/dead-letter and terminal expired-lease behavior tests against PostgreSQL
-- [ ] Worker process crash/restart recovery test
+- [x] Worker process crash/restart recovery test against disposable PostgreSQL
 - [ ] Provider contract tests
 - [ ] Media tests
 - [ ] Security tests
@@ -115,14 +115,24 @@ The complete YouTube automation platform is **not yet production-ready** because
 - [ ] Manual approval gates verified
 - [ ] Production deployment evidence
 
-## Validation evidence for this change
+## Validation evidence — worker crash recovery (PR #8)
 
-- **PASS — Local tests:** 49 tests passed with Python 3.12 and a clean disposable PostgreSQL 17.6 test database.
-- **PASS — Local backup/restore drill:** PostgreSQL 17.6 `pg_dump` created a 12,037-byte custom archive with mode `0600`; restore into a new PostgreSQL 17.6 database reproduced counts for content jobs, queue rows, audit events, rate-limit buckets, and migration records, plus the queue sequence state. A separate password-authenticated PostgreSQL 17.6 backup/restore passed using the temporary backup password file and a protected restore `PGPASSFILE`. The migration runner provisioned the restricted runtime role, its content-job read was verified, and `ANALYZE` completed.
-- **PASS — Local code checks:** Ruff format check, Ruff lint, and Python compilation.
-- **PASS — Local repository/runtime checks:** `make validate`, secret-filename check, and a no-cache Docker image build; the image's backup utility help command ran.
+- **PASS — Local tests:** 45 tests passed with Python 3.12 and disposable PostgreSQL 17.6. The worker crash/restart test killed a process after it claimed a job, then verified that a production-mode worker recovered the lease, blocked the unhandled job, and wrote both recovery and block audit events.
+- **PASS — Local code checks:** Ruff 0.13.1 format check, Ruff lint, and Python compilation.
+- **PASS — Local repository checks:** `make validate`, `make security`, `git diff --check`, and Compose configuration validation with synthetic placeholders.
 - **PASS with scope limit — Dependency audit:** `pip-audit` reported no known vulnerabilities; the local `sadwave-studio` distribution was skipped because it is not published on PyPI, while its installed dependencies were audited.
-- **PASS — Hosted PR checks:** application, container, dependency-review, CodeQL, and Analyze GitHub Actions passed for commit `f0ffe0b`.
-- **PENDING — Hosted/external gates:** production backup scheduling/retention, encrypted off-host storage, defined RPO/RTO, production recovery exercise, rollback, provider-contract, full security, end-to-end, and full worker crash/restart evidence.
+- **PASS — Hosted checks:** application, container, dependency-review, CodeQL, and Analyze GitHub Actions passed for PR #8 head `2783174`; the merge commit was `b1429ad` and its main CI and CodeQL checks passed.
+- **PENDING — Production/external gates:** deployment and crash/restart evidence in the target runtime, backup/restore, rollback, provider-contract, full security, and end-to-end validation.
+
+## Validation evidence — PostgreSQL backup/restore (PR #6)
+
+- **PASS — Local tests:** 53 tests passed with Python 3.12 and disposable PostgreSQL 17.6 after syncing with current `main`.
+- **PASS — Local backup/restore drill:** PostgreSQL 17.6 `pg_dump` created a 12,037-byte custom archive with mode `0600`; restore into a new PostgreSQL 17.6 database reproduced counts for content jobs, queue rows, audit events, rate-limit buckets, and migration records, plus the queue sequence state. A separate password-authenticated restore passed using a temporary backup password file and a protected restore `PGPASSFILE`. The migration runner provisioned the restricted runtime role, its content-job read was verified, and `ANALYZE` completed.
+- **PASS — Local code checks:** Ruff 0.13.1 format and lint, plus Python compilation.
+- **PASS — Local repository checks:** `make validate`, `make security`, `git diff --check`, and Compose configuration validation with synthetic placeholders.
+- **PASS with scope limit — Dependency audit:** `pip-audit` reported no known vulnerabilities; the local `sadwave-studio` distribution was skipped because it is not published on PyPI.
+- **PASS — Container checks:** `docker build --pull -t sadwave-studio:review .` completed, and the built image's `scripts/backup.py --help` command ran.
+- **PASS — Hosted checks for prior PR #6 head:** application, container, dependency-review, CodeQL, and Analyze GitHub Actions passed for `f0ffe0b`; checks for the updated branch are pending.
+- **PENDING — Production/external gates:** automated backup scheduling and retention, encrypted off-host storage, defined RPO/RTO, production recovery exercise, rollback, provider-contract, full security, and end-to-end validation.
 
 A production claim requires evidence for every applicable gate. A code path or checklist item is not complete merely because it exists; it must be validated in the target runtime.
