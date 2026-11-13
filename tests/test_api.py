@@ -1,6 +1,10 @@
+import json
+import logging
+
 from fastapi.testclient import TestClient
 
 from sadwave.api import app
+from sadwave.logging_config import JsonLogFormatter
 
 client = TestClient(app)
 
@@ -9,6 +13,35 @@ def test_health():
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+
+def test_http_request_log_uses_route_template_and_server_generated_id(caplog):
+    client_request_id = "client-request-secret-sentinel"
+    query_secret = "query-secret-sentinel"
+    caplog.set_level(logging.INFO, logger="sadwave.api")
+
+    response = client.get(
+        "/health",
+        params={"access_token": query_secret},
+        headers={"X-Request-ID": client_request_id},
+    )
+
+    assert response.status_code == 200
+    request_log = next(
+        record
+        for record in caplog.records
+        if record.name == "sadwave.api" and getattr(record, "event", None) == "http_request"
+    )
+    structured_log = JsonLogFormatter().format(request_log)
+    payload = json.loads(structured_log)
+
+    assert payload["route"] == "/health"
+    assert payload["method"] == "GET"
+    assert payload["status_code"] == 200
+    assert isinstance(payload["duration_ms"], float)
+    assert payload["log_request_id"] != client_request_id
+    assert client_request_id not in structured_log
+    assert query_secret not in structured_log
 
 
 def test_create_job_requires_idempotency():

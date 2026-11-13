@@ -27,6 +27,8 @@ Worker ──┘
 
 Dashboard/CLI, provider adapters, and object storage are not implemented yet.
 
+The supported API and worker entrypoints emit structured JSON logs. API request events include a server-generated log ID, route template, status, method, and duration; they omit raw URLs, query strings, and caller-supplied request IDs. Uvicorn access logging is disabled.
+
 ## Proposed repository shape
 
 ```text
@@ -107,6 +109,8 @@ External failures are classified as:
 - SECURITY
 
 Workers must support timeout, retry, dead-letter, cancellation, heartbeat, lease/recovery, and duplicate-request protection.
+
+The current worker handles SIGINT and SIGTERM by stopping its polling loop. A shutdown request interrupts an idle poll; the worker finishes its current database operation before exiting, and lease recovery handles work abandoned by a process crash.
 
 ## Cost controls
 
