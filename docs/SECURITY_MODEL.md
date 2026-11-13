@@ -37,13 +37,7 @@ Structured request logs use an explicit field allowlist and omit raw URLs, query
 
 The PostgreSQL runtime role must not own the application database or objects. The migration runner fails closed when an existing runtime role still owns database objects; ownership must be corrected by the database administrator before migrations continue.
 
-## Backup artifacts
-
-Logical database archives contain application data and must be handled as sensitive data. The backup utility writes mode-0600 files, removes database passwords from client arguments, and uses a temporary mode-0600 libpq password file when a password is supplied through the environment or connection string. Operators remain responsible for restricted backup directories, encryption, retention, and off-host storage. Restore only archives from trusted sources into a new empty database.
-
-## Docker build context
-
-The Docker build context uses a default-deny `.dockerignore` allowlist. Only the Dockerfile, package metadata, application runtime package, migrations, and approved scripts are included. Local environment files, tests, backups, generated data, and Git metadata must remain outside the builder context.
+Docker builds use a context allowlist containing only the Dockerfile, package metadata, runtime package, migrations, and scripts. Local environment files, tests, backups, generated data, and Git metadata must not be sent to the builder.
 
 ## Publishing
 
