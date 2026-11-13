@@ -9,6 +9,7 @@ Local-first foundation for secure YouTube content operations, with production re
 - Python 3.12 + FastAPI runtime
 - Environment validation with production fail-closed rules
 - Request correlation IDs
+- Structured JSON API and worker logs with route-only request metadata
 - /health, /ready, /version
 - Bearer authentication for staging/production API mutations
 - 1 MiB request-body limit on content-job creation
