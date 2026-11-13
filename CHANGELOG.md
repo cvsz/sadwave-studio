@@ -36,7 +36,9 @@ All notable changes to SadwaveStudio should be documented here.
 - Compose credentials are required through environment injection rather than committed defaults.
 - Worker execution refuses unsupported workflow states instead of guessing behavior.
 - Worker handles SIGINT/SIGTERM and interrupts idle polling for prompt graceful shutdown.
-- Add an on-demand PostgreSQL custom-archive backup utility with credential-safe subprocess handling and a disposable restore runbook.
+- API request logs use route templates and server-generated IDs; Uvicorn access logs that expose raw URLs are disabled.
+- Docker builds now use a strict context allowlist so local secrets, backups, tests, generated files, and Git metadata are not sent to the builder.
+- Add an operator-run PostgreSQL custom-archive backup utility with protected temporary credentials, archive validation, SHA-256 output, and no-overwrite semantics; scheduling and off-host protection remain operator responsibilities.
 
 ### Security
 
