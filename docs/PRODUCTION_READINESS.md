@@ -123,6 +123,12 @@ The complete YouTube automation platform is **not yet production-ready** because
 - **PASS — Hosted checks:** application, container, dependency-review, CodeQL, and Analyze GitHub Actions passed for PR #8 head `2783174`; the merge commit was `b1429ad` and its main CI and CodeQL checks passed.
 - **PENDING — Production/external gates:** deployment and crash/restart evidence in the target runtime, backup/restore, rollback, provider-contract, full security, and end-to-end validation.
 
+## Validation evidence — PostgreSQL logical backup (salvaged from PR #6)
+
+- **PASS — Prior submitted evidence:** the original PR reports a PostgreSQL 17.6 backup/restore drill with table-count and queue-sequence checks, protected password-file authentication, and a disposable restore target.
+- **PASS — Prior submitted evidence:** 49 tests passed on Python 3.12, along with Ruff format/lint, compilation, `make validate`, `make security`, dependency audit, Docker build, and CLI help smoke check.
+- **PENDING — Replacement branch verification:** hosted CI, CodeQL, and Dependency Review are rerunning against the current-main-based replacement PR. Production scheduling, retention, encrypted off-host storage, PITR, and RPO/RTO remain unimplemented.
+
 ## Validation evidence — structured logging
 
 - **PASS — Local tests:** 49 tests passed with Python 3.12 and disposable PostgreSQL 17.6, including the worker recovery test updated to assert JSON event fields.
