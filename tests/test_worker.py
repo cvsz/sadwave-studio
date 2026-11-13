@@ -1,7 +1,7 @@
 import threading
 
-from sadwave.config import Settings
 from sadwave import worker
+from sadwave.config import Settings
 
 
 class StopAfterWaitEvent(threading.Event):
@@ -28,7 +28,6 @@ class IdleRepository:
 
     def claim_next(self, _worker_id: str, _lease_seconds: int):
         self.claim_calls += 1
-        return None
 
 
 def test_worker_interrupts_idle_poll_when_shutdown_is_requested(monkeypatch, caplog):
@@ -54,7 +53,9 @@ def test_main_installs_sigint_and_sigterm_shutdown_handlers(monkeypatch):
     settings = Settings(app_env="production", database_url="postgresql://localhost/sadwave")
     handlers = {}
     started = []
+    configured_levels = []
     monkeypatch.setattr(worker, "get_settings", lambda **_kwargs: settings)
+    monkeypatch.setattr(worker, "configure_logging", configured_levels.append)
     monkeypatch.setattr(
         worker.signal,
         "signal",
@@ -68,6 +69,7 @@ def test_main_installs_sigint_and_sigterm_shutdown_handlers(monkeypatch):
 
     worker.main()
 
+    assert configured_levels == [settings.log_level]
     stop_event, received_settings = started[0]
     assert received_settings is settings
     assert not stop_event.is_set()
