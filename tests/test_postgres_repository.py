@@ -1,3 +1,4 @@
+import json
 import os
 import secrets
 import select
@@ -491,9 +492,13 @@ worker.run_worker(
         restarted_worker.send_signal(signal.SIGTERM)
         output, _ = restarted_worker.communicate(timeout=10)
         assert restarted_worker.returncode == 0
-        assert "recovered_expired_leases count=1" in output
-        assert "worker_job_blocked" in output
-        assert "worker_shutdown_complete" in output
+        log_events = [json.loads(line) for line in output.splitlines()]
+        recovered_event = next(
+            event for event in log_events if event.get("event") == "recovered_expired_leases"
+        )
+        assert recovered_event["count"] == 1
+        assert any(event.get("event") == "worker_job_blocked" for event in log_events)
+        assert any(event.get("event") == "worker_shutdown_complete" for event in log_events)
     finally:
         if restarted_worker.poll() is None:
             restarted_worker.kill()

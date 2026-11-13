@@ -33,6 +33,8 @@ Uploaded media is untrusted and must be processed in an isolated worker with res
 
 Secrets must be injected through runtime secret management. Never store OAuth access/refresh tokens, API keys, cookies, passwords, authorization headers, or private keys in source control or logs.
 
+Structured request logs use an explicit field allowlist and omit raw URLs, query strings, caller-provided request IDs, authorization headers, and request bodies. Do not add credential-bearing or untrusted content fields to production logs.
+
 The PostgreSQL runtime role must not own the application database or objects. The migration runner fails closed when an existing runtime role still owns database objects; ownership must be corrected by the database administrator before migrations continue.
 
 ## Publishing

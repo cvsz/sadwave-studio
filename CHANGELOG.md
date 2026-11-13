@@ -21,6 +21,7 @@ All notable changes to SadwaveStudio should be documented here.
 - Database-backed API rate limiting
 - Dedicated production worker service
 - Production API bearer authentication
+- Structured JSON API and worker logs with allowlisted operational fields
 - Docker and Compose runtime with dependency healthchecks
 - Unit/API test suite
 - Ruff formatting/linting and Python compile validation
