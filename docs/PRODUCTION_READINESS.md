@@ -8,7 +8,7 @@ This file is the authoritative checklist for declaring SadwaveStudio production-
 
 The repository implements a durable PostgreSQL-backed queue, lease fencing and recovery, bounded retries, transactional audit writes, atomic idempotency, database-backed API rate limiting, common request/error handling, versioned migrations, production Compose topology, and pinned CI actions. The worker has no content processors; queued work is explicitly blocked and dead-lettered with an audit event. These capabilities still require hosted CI and operational evidence before release claims.
 
-The complete YouTube automation platform is **not yet production-ready** because YouTube OAuth/synchronization, provider contracts, media isolation, AI execution, dashboard/RBAC, backup/restore evidence, and full integration/E2E/recovery evidence are still outstanding.
+The complete YouTube automation platform is **not yet production-ready** because YouTube OAuth/synchronization, provider contracts, media isolation, AI execution, dashboard/RBAC, automated backup retention and off-host protection, production recovery objectives, and full integration/E2E/recovery evidence are still outstanding. A disposable local PostgreSQL restore drill has passed; this is not production recovery evidence.
 
 ## Implemented capability checklist
 
@@ -43,8 +43,9 @@ The complete YouTube automation platform is **not yet production-ready** because
 - [x] Compose PostgreSQL dependency health
 - [x] Dedicated worker service
 - [ ] Object storage
-- [ ] Backup
-- [ ] Restore verification
+- [x] On-demand PostgreSQL logical backup utility
+- [x] Restore runbook and disposable PostgreSQL restore drill
+- [ ] Automated scheduling, retention, encrypted off-host copy, and point-in-time recovery
 - [ ] Production resource limits and runtime isolation
 - [ ] Migration rollback policy
 
@@ -96,7 +97,7 @@ The complete YouTube automation platform is **not yet production-ready** because
 - [ ] Security tests
 - [ ] E2E tests
 - [x] Retry/dead-letter tests against disposable PostgreSQL
-- [ ] Backup/restore test
+- [x] Backup/restore test against disposable PostgreSQL
 
 ### Operations
 
@@ -108,7 +109,7 @@ The complete YouTube automation platform is **not yet production-ready** because
 - [ ] Traces
 - [ ] Alerts
 - [ ] Cost accounting
-- [ ] Backup/restore runbook
+- [x] Operator initiated PostgreSQL backup/restore runbook
 - [ ] RPO/RTO defined and tested
 - [ ] Rollback tested
 - [ ] Manual approval gates verified
